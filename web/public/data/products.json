@@ -1,0 +1,135 @@
+{
+  "categories": [
+    {
+      "id": "organic",
+      "name": "Organic",
+      "image": "/images/categories/vegetables-thumb.png",
+      "description": "Fresh organic vegetables"
+    },
+    {
+      "id": "non-organic",
+      "name": "Non-organic",
+      "image": "/images/categories/rice-thumb.png",
+      "description": "Premium quality rice"
+    }
+  ],
+  "products": [
+    {
+      "id": 1,
+      "name": "Organic Tomatoes",
+      "category": "organic",
+      "price": 120,
+      "originalPrice": 150,
+      "unit": "kg",
+      "images": [
+        "/images/vegetables/tomatoes-1.jpg",
+        "/images/vegetables/tomatoes-2.jpg",
+        "/images/vegetables/tomatoes-3.jpg"
+      ],
+      "description": "Our organic tomatoes are grown without synthetic pesticides or fertilizers, harvested at peak ripeness for maximum flavor and nutrition.",
+      "features": [
+        "100% Organic",
+        "No Artificial Ripening",
+        "Rich in Lycopene",
+        "Farm Fresh Daily"
+      ],
+      "rating": 4.5,
+      "reviews": 24,
+      "inStock": true,
+      "stock": 50,
+      "farm": "Green Valley Organic Farm"
+    },
+    {
+      "id": 2,
+      "name": "Basmati Rice",
+      "category": "non-organic",
+      "price": 180,
+      "originalPrice": 200,
+      "unit": "kg",
+      "images": [
+        "/images/rice/basmati-1.jpg"
+      ],
+      "description": "Premium quality basmati rice with long grains and aromatic flavor.",
+      "features": [
+        "100% Organic",
+        "Aromatic Long Grains",
+        "Traditional Farming",
+        "Premium Quality"
+      ],
+      "rating": 4.8,
+      "reviews": 36,
+      "inStock": true,
+      "stock": 100,
+      "farm": "Paddy Fields Organic Farm"
+    },
+    {
+      "id": 3,
+      "name": "Organic Potatoes",
+      "category": "organic",
+      "price": 80,
+      "originalPrice": 100,
+      "unit": "kg",
+      "images": [
+        "/images/vegetables/potatoes-1.jpg"
+      ],
+      "description": "Fresh organic potatoes, perfect for all your cooking needs.",
+      "features": [
+        "100% Organic",
+        "Rich in Nutrients",
+        "Versatile Cooking",
+        "Farm Fresh"
+      ],
+      "rating": 4.3,
+      "reviews": 18,
+      "inStock": true,
+      "stock": 75,
+      "farm": "Green Valley Organic Farm"
+    },
+    {
+      "id": 4,
+      "name": "Brown Rice",
+      "category": "non-organic",
+      "price": 150,
+      "originalPrice": 180,
+      "unit": "kg",
+      "images": [
+        "/images/rice/brown-1.jpg"
+      ],
+      "description": "Healthy brown rice with all the natural nutrients intact.",
+      "features": [
+        "100% Organic",
+        "High in Fiber",
+        "Nutrient Rich",
+        "Healthy Choice"
+      ],
+      "rating": 4.6,
+      "reviews": 29,
+      "inStock": true,
+      "stock": 60,
+      "farm": "Paddy Fields Organic Farm"
+    }
+  ],
+  "testimonials": [
+    {
+      "id": 1,
+      "name": "Priyanka Sharma",
+      "rating": 5,
+      "text": "The tomatoes were absolutely delicious! Sweet and juicy, perfect for my salads. Will definitely order again.",
+      "date": "2023-06-15"
+    },
+    {
+      "id": 2,
+      "name": "Rahul Kumar",
+      "rating": 4,
+      "text": "Great quality products. Made an amazing pasta sauce with the tomatoes. Only reason for 4 stars is delivery time.",
+      "date": "2023-05-28"
+    },
+    {
+      "id": 3,
+      "name": "Anita Reddy",
+      "rating": 5,
+      "text": "The basmati rice has amazing aroma and taste. My family loves it! Will be a regular customer.",
+      "date": "2023-07-10"
+    }
+  ]
+}

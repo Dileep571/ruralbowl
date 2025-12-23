@@ -1,0 +1,244 @@
+// Since we're importing from public folder, we need to handle it differently
+
+let productsData = null;
+
+// Function to load data (simulate API call)
+const loadProductsData = () => {
+  if (productsData) return productsData;
+  
+  // In a real scenario, this would be an API call
+  // For now, we'll return static data
+  productsData = {
+  "categories": [
+    {
+      "id": "organic",
+      "name": "Organic",
+      "image": "/images/categories/vegetables-thumb.png",
+      "description": "Fresh organic vegetables"
+    },
+    {
+      "id": "non-organic",
+      "name": "Non-organic",
+      "image": "/images/categories/rice-thumb.png",
+      "description": "Premium quality rice"
+    }
+  ],
+  "products": [
+    {
+      "id": 1,
+      "name": "Organic Tomatoes",
+      "category": "organic",
+      "price": 120,
+      "originalPrice": 150,
+      "unit": "kg",
+      "images": [
+        "/images/vegetables/tomatoes-1.jpg",
+        "/images/vegetables/tomatoes-2.jpg",
+        "/images/vegetables/tomatoes-3.jpg"
+      ],
+      "description": "Our organic tomatoes are grown without synthetic pesticides or fertilizers, harvested at peak ripeness for maximum flavor and nutrition.",
+      "features": [
+        "100% Organic",
+        "No Artificial Ripening",
+        "Rich in Lycopene",
+        "Farm Fresh Daily"
+      ],
+      "rating": 4.5,
+      "reviews": 24,
+      "inStock": true,
+      "stock": 50,
+      "farm": "Green Valley Organic Farm"
+    },
+    {
+      "id": 2,
+      "name": "Basmati Rice",
+      "category": "non-organic",
+      "price": 180,
+      "originalPrice": 200,
+      "unit": "kg",
+      "images": [
+        "/images/rice/basmati-1.jpg"
+      ],
+      "description": "Premium quality basmati rice with long grains and aromatic flavor.",
+      "features": [
+        "100% Organic",
+        "Aromatic Long Grains",
+        "Traditional Farming",
+        "Premium Quality"
+      ],
+      "rating": 4.8,
+      "reviews": 36,
+      "inStock": true,
+      "stock": 100,
+      "farm": "Paddy Fields Organic Farm"
+    },
+    {
+      "id": 3,
+      "name": "Organic Potatoes",
+      "category": "organic",
+      "price": 80,
+      "originalPrice": 100,
+      "unit": "kg",
+      "images": [
+        "/images/vegetables/potatoes-1.jpg"
+      ],
+      "description": "Fresh organic potatoes, perfect for all your cooking needs.",
+      "features": [
+        "100% Organic",
+        "Rich in Nutrients",
+        "Versatile Cooking",
+        "Farm Fresh"
+      ],
+      "rating": 4.3,
+      "reviews": 18,
+      "inStock": true,
+      "stock": 75,
+      "farm": "Green Valley Organic Farm"
+    },
+    {
+      "id": 4,
+      "name": "Brown Rice",
+      "category": "non-organic",
+      "price": 150,
+      "originalPrice": 180,
+      "unit": "kg",
+      "images": [
+        "/images/rice/brown-1.jpg"
+      ],
+      "description": "Healthy brown rice with all the natural nutrients intact.",
+      "features": [
+        "100% Organic",
+        "High in Fiber",
+        "Nutrient Rich",
+        "Healthy Choice"
+      ],
+      "rating": 4.6,
+      "reviews": 29,
+      "inStock": true,
+      "stock": 60,
+      "farm": "Paddy Fields Organic Farm"
+    }
+  ],
+  "testimonials": [
+    {
+      "id": 1,
+      "name": "Priyanka Sharma",
+      "rating": 5,
+      "text": "The tomatoes were absolutely delicious! Sweet and juicy, perfect for my salads. Will definitely order again.",
+      "date": "2023-06-15"
+    },
+    {
+      "id": 2,
+      "name": "Rahul Kumar",
+      "rating": 4,
+      "text": "Great quality products. Made an amazing pasta sauce with the tomatoes. Only reason for 4 stars is delivery time.",
+      "date": "2023-05-28"
+    },
+    {
+      "id": 3,
+      "name": "Anita Reddy",
+      "rating": 5,
+      "text": "The basmati rice has amazing aroma and taste. My family loves it! Will be a regular customer.",
+      "date": "2023-07-10"
+    }
+  ]
+}
+  
+  return productsData;
+};
+
+export const getProducts = () => {
+  const data = loadProductsData();
+  return data.products;
+};
+
+export const getProductById = (id) => {
+  const data = loadProductsData();
+  return data.products.find(product => product.id === parseInt(id));
+};
+
+export const getProductsByCategory = (category) => {
+  const data = loadProductsData();
+  if (!category || category === 'all') return data.products;
+  return data.products.filter(product => product.category === category);
+};
+
+export const getCategories = () => {
+  const data = loadProductsData();
+  return data.categories;
+};
+
+export const getTestimonials = () => {
+  const data = loadProductsData();
+  return data.testimonials;
+};
+
+export const getPopularProducts = () => {
+  const data = loadProductsData();
+  // Return products with highest ratings as popular
+  return [...data.products]
+    .sort((a, b) => b.rating - a.rating)
+    .slice(0, 4);
+};
+
+export const getSubscriptionPlans = () => {
+  return [
+    {
+      id: 'weekly-veg',
+      name: 'Weekly Vegetable Basket',
+      type: 'weekly',
+      duration: '1 week',
+      price: 299,
+      originalPrice: 399,
+      description: 'Fresh seasonal vegetables delivered every week',
+      features: [
+        '5-6 different seasonal vegetables',
+        'Serves 2-3 people',
+        'Free delivery',
+        'Customizable preferences'
+      ],
+      items: ['Tomatoes', 'Potatoes', 'Onions', 'Leafy Greens', 'Seasonal Special'],
+      image: '/images/plans/weekly-basket.jpg',
+      popular: true
+    },
+    {
+      id: 'biweekly-veg',
+      name: '15 Days Vegetable Plan',
+      type: 'biweekly',
+      duration: '15 days',
+      price: 549,
+      originalPrice: 699,
+      description: 'Perfect for small families, delivered every 15 days',
+      features: [
+        '7-8 different seasonal vegetables',
+        'Serves 3-4 people',
+        'Free delivery',
+        'Recipe suggestions included',
+        'Customizable preferences'
+      ],
+      items: ['Tomatoes', 'Potatoes', 'Onions', 'Carrots', 'Beans', 'Leafy Greens', 'Seasonal Mix'],
+      image: '/images/plans/biweekly-basket.jpg',
+      popular: false
+    },
+    {
+      id: 'monthly-veg',
+      name: 'Monthly Vegetable Subscription',
+      type: 'monthly',
+      duration: '1 month',
+      price: 999,
+      originalPrice: 1299,
+      description: 'Complete vegetable solution for the entire month',
+      features: [
+        '10-12 different seasonal vegetables',
+        'Serves 4-5 people',
+        'Free delivery',
+        'Weekly recipe guides',
+        'Priority support',
+        'Customizable preferences'
+      ],
+      items: ['Tomatoes', 'Potatoes', 'Onions', 'Carrots', 'Beans', 'Cabbage', 'Cauliflower', 'Leafy Greens', 'Seasonal Mix', 'Herbs'],
+      image: '/images/plans/monthly-basket.jpg',
+      popular: false
+    }
+  ];
+};

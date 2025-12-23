@@ -1,0 +1,83 @@
+'use client';
+import { createContext, useContext, useState, useEffect } from 'react';
+
+const AuthContext = createContext();
+
+export const AuthProvider = ({ children }) => {
+  const [user, setUser] = useState(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    // Check if user is logged in (from localStorage or API)
+    const savedUser = localStorage.getItem('ruralBowlUser');
+    if (savedUser) {
+      setUser(JSON.parse(savedUser));
+    }
+    setLoading(false);
+  }, []);
+
+  const login = (userData) => {
+    const userWithLoyalty = {
+      ...userData,
+      loyaltyPoints: userData.loyaltyPoints || 0,
+      totalSpent: userData.totalSpent || 0
+    };
+    setUser(userWithLoyalty);
+    localStorage.setItem('ruralBowlUser', JSON.stringify(userWithLoyalty));
+  };
+
+  const logout = () => {
+    setUser(null);
+    localStorage.removeItem('ruralBowlUser');
+  };
+
+  const updateLoyaltyPoints = (orderAmount) => {
+    if (!user) return;
+    
+    const pointsEarned = Math.floor(orderAmount / 100); // 1 point per ₹100
+    const updatedUser = {
+      ...user,
+      loyaltyPoints: (user.loyaltyPoints || 0) + pointsEarned,
+      totalSpent: (user.totalSpent || 0) + orderAmount
+    };
+    
+    setUser(updatedUser);
+    localStorage.setItem('ruralBowlUser', JSON.stringify(updatedUser));
+    
+    return pointsEarned;
+  };
+
+  const redeemLoyaltyPoints = (pointsToRedeem) => {
+    if (!user || pointsToRedeem > user.loyaltyPoints) return false;
+    
+    const updatedUser = {
+      ...user,
+      loyaltyPoints: user.loyaltyPoints - pointsToRedeem
+    };
+    
+    setUser(updatedUser);
+    localStorage.setItem('ruralBowlUser', JSON.stringify(updatedUser));
+    return true;
+  };
+
+  return (
+    <AuthContext.Provider value={{ 
+      user, 
+      login, 
+      logout, 
+      loading,
+      updateLoyaltyPoints,
+      redeemLoyaltyPoints
+    }}>
+      {children}
+    </AuthContext.Provider>
+  );
+};
+
+export const useAuth = () => {
+  const context = useContext(AuthContext);
+  if (!context) {
+    throw new Error('useAuth must be used within an AuthProvider');
+  }
+  return context;
+};
