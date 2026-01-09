@@ -2,8 +2,16 @@ const jwt = require('jsonwebtoken');
 
 const authMiddleware = async (req, res, next) => {
   try {
-    // Get token from header
-    const token = req.header('Authorization')?.replace('Bearer ', '') || req.header('authorization')?.replace('Bearer ', '');
+    // Priority 1: Get token from HttpOnly cookie (RECOMMENDED)
+    let token = req.cookies?.accessToken;
+    
+    // Priority 2: Fallback to Authorization header (for backwards compatibility)
+    if (!token) {
+      const authHeader = req.header('Authorization') || req.header('authorization');
+      if (authHeader && authHeader.startsWith('Bearer ')) {
+        token = authHeader.replace('Bearer ', '');
+      }
+    }
 
     if (!token) {
       return res.status(401).json({ message: 'No token, authorization denied' });

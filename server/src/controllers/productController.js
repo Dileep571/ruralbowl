@@ -1,4 +1,5 @@
 const db = require('../config/database');
+const ProductVariant = require('../models/ProductVariant');
 
 // Get All Products
 const getProducts = async (req, res) => {
@@ -31,9 +32,21 @@ const getProducts = async (req, res) => {
 
     const result = await db.query(query, params);
 
+    // Fetch variants for each product
+    const productsWithVariants = await Promise.all(
+      result.rows.map(async (product) => {
+        if (product.has_variants) {
+          const variants = await ProductVariant.getByProductId(product.id);
+          const priceRange = await ProductVariant.getPriceRange(product.id);
+          return { ...product, variants, price_range: priceRange };
+        }
+        return product;
+      })
+    );
+
     res.json({
-      products: result.rows,
-      count: result.rows.length,
+      products: productsWithVariants,
+      count: productsWithVariants.length,
     });
   } catch (error) {
     console.error('Get products error:', error);
@@ -58,7 +71,15 @@ const getProductById = async (req, res) => {
       return res.status(404).json({ message: 'Product not found' });
     }
 
-    res.json({ product: result.rows[0] });
+    const product = result.rows[0];
+
+    // Fetch variants if product has variants
+    if (product.has_variants) {
+      const variants = await ProductVariant.getByProductId(product.id);
+      product.variants = variants;
+    }
+
+    res.json({ product });
   } catch (error) {
     console.error('Get product error:', error);
     res.status(500).json({ message: 'Server error' });
@@ -68,13 +89,13 @@ const getProductById = async (req, res) => {
 // Create Product (Admin only)
 const createProduct = async (req, res) => {
   try {
-    const { name, slug, description, price, unit, category_id, image_url, stock_quantity } = req.body;
+    const { name, slug, description, price, unit, unit_value, category_id, image_url, stock_quantity } = req.body;
 
     const result = await db.query(
-      `INSERT INTO products (name, slug, description, price, unit, category_id, image_url, stock_quantity) 
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8) 
+      `INSERT INTO products (name, slug, description, price, unit, unit_value, category_id, image_url, stock_quantity) 
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) 
        RETURNING *`,
-      [name, slug, description, price, unit, category_id, image_url, stock_quantity || 0]
+      [name, slug, description, price, unit, unit_value || 1, category_id, image_url, stock_quantity || 0]
     );
 
     res.status(201).json({
@@ -91,16 +112,16 @@ const createProduct = async (req, res) => {
 const updateProduct = async (req, res) => {
   try {
     const { id } = req.params;
-    const { name, slug, description, price, unit, category_id, image_url, stock_quantity, is_available } = req.body;
+    const { name, slug, description, price, unit, unit_value, category_id, image_url, stock_quantity, is_available } = req.body;
 
     const result = await db.query(
       `UPDATE products 
        SET name = $1, slug = $2, description = $3, price = $4, unit = $5, 
-           category_id = $6, image_url = $7, stock_quantity = $8, is_available = $9, 
+           unit_value = $6, category_id = $7, image_url = $8, stock_quantity = $9, is_available = $10, 
            updated_at = CURRENT_TIMESTAMP 
-       WHERE id = $10 
+       WHERE id = $11 
        RETURNING *`,
-      [name, slug, description, price, unit, category_id, image_url, stock_quantity, is_available, id]
+      [name, slug, description, price, unit, unit_value || 1, category_id, image_url, stock_quantity, is_available, id]
     );
 
     if (result.rows.length === 0) {

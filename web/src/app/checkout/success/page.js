@@ -1,10 +1,18 @@
 'use client';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
+import { useEffect } from 'react';
+import { useCart } from '@/components/CartProvider';
 
 export default function CheckoutSuccessPage() {
   const searchParams = useSearchParams();
   const orderId = searchParams.get('orderId');
+  const { clearCart } = useCart();
+
+  // Clear cart silently when success page loads
+  useEffect(() => {
+    clearCart(false); // false = don't show toast message
+  }, []);
 
   return (
     <div className="min-h-[60vh] flex items-center justify-center px-4">

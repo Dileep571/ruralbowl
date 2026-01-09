@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { adminAPI, productsAPI } from '@/lib/api';
 import { toast } from 'react-hot-toast';
+import { Plus, Trash2, Save, X } from 'lucide-react';
 
 export default function NewProductPage() {
   const router = useRouter();
@@ -12,12 +13,18 @@ export default function NewProductPage() {
   const [error, setError] = useState('');
   const [imageFile, setImageFile] = useState(null);
   const [imagePreview, setImagePreview] = useState('');
+  const [hasVariants, setHasVariants] = useState(false);
+  const [variants, setVariants] = useState([
+    { variant_name: 'Weight', variant_value: '', price: '', original_price: '', stock_quantity: '', sku: '', is_available: true }
+  ]);
   const [formData, setFormData] = useState({
     name: '',
     slug: '',
     description: '',
     price: '',
+    original_price: '',
     unit: 'kg',
+    unit_value: '1',
     category_id: '',
     image_url: '',
     stock_quantity: '0',
@@ -31,10 +38,8 @@ export default function NewProductPage() {
   const loadCategories = async () => {
     try {
       const data = await productsAPI.getCategories();
-      // API client now returns the array directly
       const categoriesArray = Array.isArray(data) ? data : [];
       setCategories(categoriesArray);
-      console.log('Categories loaded:', categoriesArray);
       if (categoriesArray.length > 0 && !formData.category_id) {
         setFormData(prev => ({ ...prev, category_id: categoriesArray[0].id }));
       }
@@ -112,12 +117,48 @@ export default function NewProductPage() {
     }
   };
 
+  const addVariant = () => {
+    setVariants([...variants, { 
+      variant_name: variants[0]?.variant_name || 'Weight',
+      variant_value: '', 
+      price: '', 
+      original_price: '', 
+      stock_quantity: '', 
+      sku: '', 
+      is_available: true 
+    }]);
+  };
+
+  const removeVariant = (index) => {
+    if (variants.length > 1) {
+      setVariants(variants.filter((_, i) => i !== index));
+    } else {
+      toast.error('At least one variant is required when variants are enabled');
+    }
+  };
+
+  const handleVariantChange = (index, field, value) => {
+    const newVariants = [...variants];
+    newVariants[index][field] = value;
+    setVariants(newVariants);
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     setLoading(true);
     setError('');
 
     try {
+      // Validate variants if enabled
+      if (hasVariants) {
+        const invalidVariant = variants.find(v => !v.variant_value || !v.price);
+        if (invalidVariant) {
+          toast.error('All variants must have a value and price');
+          setLoading(false);
+          return;
+        }
+      }
+
       let imageUrl = formData.image_url;
       if (imageFile) {
         const uploadedUrl = await uploadImage();
@@ -131,9 +172,20 @@ export default function NewProductPage() {
       const productData = {
         ...formData,
         image_url: imageUrl,
-        price: parseFloat(formData.price),
-        stock_quantity: parseInt(formData.stock_quantity),
+        price: hasVariants ? 0 : parseFloat(formData.price),
+        original_price: hasVariants ? null : (formData.original_price ? parseFloat(formData.original_price) : null),
+        stock_quantity: hasVariants ? 0 : parseInt(formData.stock_quantity),
         category_id: parseInt(formData.category_id),
+        has_variants: hasVariants,
+        variants: hasVariants ? variants.map(v => ({
+          variant_name: v.variant_name,
+          variant_value: v.variant_value,
+          price: parseFloat(v.price),
+          original_price: v.original_price ? parseFloat(v.original_price) : null,
+          stock_quantity: parseInt(v.stock_quantity || 0),
+          sku: v.sku || null,
+          is_available: v.is_available
+        })) : undefined
       };
 
       await adminAPI.createProduct(productData);
@@ -161,6 +213,7 @@ export default function NewProductPage() {
       )}
 
       <form onSubmit={handleSubmit} className="bg-white rounded-lg shadow p-6 space-y-6">
+        {/* Product Image */}
         <div className="bg-gray-50 p-6 rounded-lg border-2 border-dashed border-gray-300">
           <label className="block text-sm font-medium text-gray-700 mb-3">
             📸 Product Image
@@ -192,7 +245,6 @@ export default function NewProductPage() {
               <div className="mt-3 space-y-1">
                 <p className="text-xs text-gray-600">✅ Supported: JPG, PNG, WebP, GIF</p>
                 <p className="text-xs text-gray-600">✅ Max size: 5MB</p>
-                <p className="text-xs text-gray-600">✅ Auto-optimized & resized to 800x800</p>
                 {uploading && (
                   <p className="text-xs text-green-600 font-semibold animate-pulse">
                     ⏳ Uploading to Cloudinary...
@@ -203,6 +255,7 @@ export default function NewProductPage() {
           </div>
         </div>
 
+        {/* Basic Information */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">Product Name *</label>
@@ -243,56 +296,241 @@ export default function NewProductPage() {
           />
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Price (₹) *</label>
+        {/* Variants Toggle */}
+        <div className="bg-blue-50 p-4 rounded-lg border border-blue-200">
+          <div className="flex items-center gap-3">
             <input
-              type="number"
-              name="price"
-              value={formData.price}
-              onChange={handleChange}
-              required
-              step="0.01"
-              min="0"
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
-              placeholder="0.00"
+              type="checkbox"
+              checked={hasVariants}
+              onChange={(e) => setHasVariants(e.target.checked)}
+              className="w-5 h-5 text-blue-600 rounded focus:ring-blue-500"
             />
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Unit *</label>
-            <select
-              name="unit"
-              value={formData.unit}
-              onChange={handleChange}
-              required
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
-            >
-              <option value="kg">Kilogram (kg)</option>
-              <option value="g">Gram (g)</option>
-              <option value="piece">Piece</option>
-              <option value="dozen">Dozen</option>
-              <option value="liter">Liter</option>
-              <option value="ml">Milliliter (ml)</option>
-              <option value="pack">Pack</option>
-            </select>
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Stock Quantity *</label>
-            <input
-              type="number"
-              name="stock_quantity"
-              value={formData.stock_quantity}
-              onChange={handleChange}
-              required
-              min="0"
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
-              placeholder="0"
-            />
+            <div>
+              <label className="text-sm font-semibold text-gray-900">
+                This product has multiple variants
+              </label>
+              <p className="text-xs text-gray-600 mt-1">
+                Enable this if your product comes in different sizes, weights, or packages (e.g., 200gm, 500gm, 1kg)
+              </p>
+            </div>
           </div>
         </div>
 
+        {/* Variants Section */}
+        {hasVariants ? (
+          <div className="space-y-4">
+            <div className="flex items-center justify-between">
+              <h3 className="text-lg font-semibold text-gray-900">Product Variants</h3>
+              <button
+                type="button"
+                onClick={addVariant}
+                className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700"
+              >
+                <Plus size={16} />
+                Add Variant
+              </button>
+            </div>
+
+            {variants.map((variant, index) => (
+              <div key={index} className="bg-gray-50 p-4 rounded-lg border border-gray-300">
+                <div className="flex items-center justify-between mb-4">
+                  <h4 className="font-medium text-gray-900">Variant #{index + 1}</h4>
+                  {variants.length > 1 && (
+                    <button
+                      type="button"
+                      onClick={() => removeVariant(index)}
+                      className="text-red-600 hover:text-red-700"
+                    >
+                      <Trash2 size={18} />
+                    </button>
+                  )}
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                  <div>
+                    <label className="block text-xs font-medium text-gray-700 mb-1">Type</label>
+                    <input
+                      type="text"
+                      value={variant.variant_name}
+                      onChange={(e) => handleVariantChange(index, 'variant_name', e.target.value)}
+                      placeholder="e.g., Weight"
+                      className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-gray-700 mb-1">Value *</label>
+                    <input
+                      type="text"
+                      value={variant.variant_value}
+                      onChange={(e) => handleVariantChange(index, 'variant_value', e.target.value)}
+                      placeholder="e.g., 500gm"
+                      required
+                      className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-gray-700 mb-1">Price (₹) *</label>
+                    <input
+                      type="number"
+                      value={variant.price}
+                      onChange={(e) => handleVariantChange(index, 'price', e.target.value)}
+                      placeholder="0.00"
+                      step="0.01"
+                      min="0"
+                      required
+                      className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-gray-700 mb-1">Original Price (₹)</label>
+                    <input
+                      type="number"
+                      value={variant.original_price}
+                      onChange={(e) => handleVariantChange(index, 'original_price', e.target.value)}
+                      placeholder="0.00"
+                      step="0.01"
+                      min="0"
+                      className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-gray-700 mb-1">Stock</label>
+                    <input
+                      type="number"
+                      value={variant.stock_quantity}
+                      onChange={(e) => handleVariantChange(index, 'stock_quantity', e.target.value)}
+                      placeholder="0"
+                      min="0"
+                      className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-gray-700 mb-1">SKU</label>
+                    <input
+                      type="text"
+                      value={variant.sku}
+                      onChange={(e) => handleVariantChange(index, 'sku', e.target.value)}
+                      placeholder="Optional"
+                      className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
+                    />
+                  </div>
+                  <div className="flex items-end">
+                    <label className="flex items-center gap-2 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={variant.is_available}
+                        onChange={(e) => handleVariantChange(index, 'is_available', e.target.checked)}
+                        className="w-4 h-4 text-green-600 rounded focus:ring-green-500"
+                      />
+                      <span className="text-xs text-gray-700">Available</span>
+                    </label>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : (
+          /* Standard Product Fields */
+          <div className="space-y-6">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Price (₹) *</label>
+                <input
+                  type="number"
+                  name="price"
+                  value={formData.price}
+                  onChange={handleChange}
+                  required={!hasVariants}
+                  step="0.01"
+                  min="0"
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
+                  placeholder="0.00"
+                />
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Original Price (₹)</label>
+                <input
+                  type="number"
+                  name="original_price"
+                  value={formData.original_price}
+                  onChange={handleChange}
+                  step="0.01"
+                  min="0"
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
+                  placeholder="0.00"
+                />
+                <p className="text-xs text-gray-500 mt-1">For showing discounts (optional)</p>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Stock Quantity *</label>
+                <input
+                  type="number"
+                  name="stock_quantity"
+                  value={formData.stock_quantity}
+                  onChange={handleChange}
+                  required={!hasVariants}
+                  min="0"
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
+                  placeholder="0"
+                />
+              </div>
+            </div>
+
+            {/* Unit Section */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-3">
+                Product Unit & Quantity
+              </label>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-medium text-gray-600 mb-2">Quantity/Weight *</label>
+                  <input
+                    type="number"
+                    name="unit_value"
+                    value={formData.unit_value}
+                    onChange={handleChange}
+                    required={!hasVariants}
+                    step="0.001"
+                    min="0"
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
+                    placeholder="e.g., 500, 1, 2"
+                  />
+                  <p className="text-xs text-gray-500 mt-1">Enter numeric value (e.g., 500 for 500gm, 1 for 1kg)</p>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-medium text-gray-600 mb-2">Unit Type *</label>
+                  <select
+                    name="unit"
+                    value={formData.unit}
+                    onChange={handleChange}
+                    required
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
+                  >
+                    <option value="kg">Kilogram (kg)</option>
+                    <option value="g">Gram (g)</option>
+                    <option value="piece">Piece</option>
+                    <option value="dozen">Dozen</option>
+                    <option value="liter">Liter (L)</option>
+                    <option value="ml">Milliliter (ml)</option>
+                    <option value="pack">Pack</option>
+                    <option value="bundle">Bundle</option>
+                    <option value="box">Box</option>
+                  </select>
+                  <p className="text-xs text-gray-500 mt-1">
+                    Preview: <span className="font-semibold text-green-600">
+                      {formData.unit_value || '1'}{formData.unit}
+                    </span>
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Category and Availability */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">Category *</label>
@@ -337,20 +575,23 @@ export default function NewProductPage() {
           </label>
         </div>
 
+        {/* Form Actions */}
         <div className="flex gap-4 pt-4 border-t border-gray-200">
           <button
             type="button"
             onClick={() => router.back()}
-            className="px-6 py-2 border border-gray-300 rounded-lg hover:bg-gray-50"
+            className="flex items-center gap-2 px-6 py-2 border border-gray-300 rounded-lg hover:bg-gray-50"
           >
+            <X size={16} />
             Cancel
           </button>
           <button
             type="submit"
             disabled={loading || uploading}
-            className="px-6 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed"
+            className="flex items-center gap-2 px-6 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            {uploading ? '📤 Uploading Image...' : loading ? '⏳ Creating...' : '✅ Create Product'}
+            <Save size={16} />
+            {uploading ? 'Uploading Image...' : loading ? 'Creating...' : 'Create Product'}
           </button>
         </div>
       </form>

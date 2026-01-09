@@ -38,8 +38,7 @@ export default function AdminLoginPage() {
     try {
       const data = await adminAPI.login(username, password);
       
-      // Store admin token and user data
-      localStorage.setItem('adminToken', data.token);
+      // Store admin user data (token is in HttpOnly cookie)
       localStorage.setItem('adminUser', JSON.stringify(data.user));
       
       toast.success('Login successful! Redirecting...');
@@ -67,12 +66,6 @@ export default function AdminLoginPage() {
               {error}
             </div>
           )}
-
-          <div className="bg-blue-50 border border-blue-200 text-blue-700 px-4 py-3 rounded-lg mb-6 text-sm">
-            <p className="font-semibold mb-1">Default Credentials:</p>
-            <p>Username: <code className="bg-blue-100 px-2 py-0.5 rounded">admin</code></p>
-            <p>Password: <code className="bg-blue-100 px-2 py-0.5 rounded">admin123</code></p>
-          </div>
 
           <form onSubmit={handleSubmit} className="space-y-6">
             <div>

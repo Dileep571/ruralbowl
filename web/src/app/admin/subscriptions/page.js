@@ -23,6 +23,7 @@ export default function AdminSubscriptionsPage() {
     delivery_frequency: 'weekly',
     features: '',
     is_active: true,
+    coming_soon: false,
   });
 
   useEffect(() => {
@@ -55,6 +56,7 @@ export default function AdminSubscriptionsPage() {
         features: Array.isArray(plan.features) ? plan.features.join('\n') : 
                   (Array.isArray(plan.items) ? plan.items.join('\n') : ''),
         is_active: plan.is_active !== false,
+        coming_soon: plan.coming_soon || false,
       });
     } else {
       setEditingPlan(null);
@@ -67,6 +69,7 @@ export default function AdminSubscriptionsPage() {
         delivery_frequency: 'weekly',
         features: '',
         is_active: true,
+        coming_soon: false,
       });
     }
     setShowModal(true);
@@ -99,6 +102,7 @@ export default function AdminSubscriptionsPage() {
         delivery_frequency: formData.delivery_frequency || 'weekly',
         items: formData.features.split('\n').filter(f => f.trim()),
         is_active: formData.is_active,
+        coming_soon: formData.coming_soon,
       };
 
       if (editingPlan) {
@@ -369,6 +373,18 @@ export default function AdminSubscriptionsPage() {
                   className="w-4 h-4 text-primary-600 rounded focus:ring-primary-500"
                 />
                 <label htmlFor="is_active" className="text-sm text-gray-700">Plan is active and available for purchase</label>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  name="coming_soon"
+                  checked={formData.coming_soon}
+                  onChange={handleChange}
+                  id="coming_soon"
+                  className="w-4 h-4 text-primary-600 rounded focus:ring-primary-500"
+                />
+                <label htmlFor="coming_soon" className="text-sm text-gray-700">Mark as "Coming Soon" (will show in UI but not allow subscription)</label>
               </div>
 
               <div className="flex gap-3 pt-4 border-t border-gray-200">

@@ -3,60 +3,39 @@
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api';
 const isDev = process.env.NODE_ENV !== 'production';
 
-// Helper function to get auth token from localStorage
-const getAuthToken = (isAdminRequest = false) => {
-  if (typeof window !== 'undefined') {
-    // For admin requests, only use adminToken
-    // For user requests, only use token
-    if (isAdminRequest) {
-      return localStorage.getItem('adminToken');
-    }
-    return localStorage.getItem('token');
-  }
-  return null;
-};
-
-// Helper to call refresh endpoint and store new token if available
+// Helper to call refresh endpoint (cookies handled automatically)
 const tryRefresh = async () => {
   try {
     if (isDev) console.log('Attempting token refresh');
     const resp = await fetch(`${API_URL}/auth/refresh`, {
       method: 'POST',
-      credentials: 'include',
+      credentials: 'include', // Send cookies
       headers: { 'Content-Type': 'application/json' },
     });
     const json = await resp.json();
     if (!resp.ok) {
       if (isDev) console.warn('Refresh failed', json);
-      return null;
+      return false;
     }
-    if (json.token) {
-      localStorage.setItem('token', json.token);
-      return json.token;
-    }
-    return null;
+    // Cookies are set automatically by browser
+    return true;
   } catch (err) {
     console.error('Refresh error:', err);
-    return null;
+    return false;
   }
 };
 
-// Helper function to make API requests
+// Helper function to make API requests with cookie-based auth
 const apiRequest = async (endpoint, options = {}) => {
-  let token = getAuthToken();
-  
   const baseHeaders = {
     'Content-Type': 'application/json',
     ...options.headers,
   };
 
-  if (token) {
-    baseHeaders['Authorization'] = `Bearer ${token}`;
-  }
-
   const config = {
     ...options,
     headers: baseHeaders,
+    credentials: 'include', // CRITICAL: Send HttpOnly cookies
   };
 
   if (isDev) console.log(`API Request: ${options.method || 'GET'} ${API_URL}${endpoint}`);
@@ -74,15 +53,10 @@ const apiRequest = async (endpoint, options = {}) => {
 
     // If access token expired, try refresh and retry once
     if (response.status === 401 && data && typeof data.message === 'string' && data.message.toLowerCase().includes('token expired')) {
-      const newToken = await tryRefresh();
-      if (newToken) {
-        // retry original request with new token
-        const retryHeaders = {
-          ...baseHeaders,
-          'Authorization': `Bearer ${newToken}`,
-        };
-        const retryConfig = { ...config, headers: retryHeaders };
-        const retryRes = await fetch(`${API_URL}${endpoint}`, retryConfig);
+      const refreshed = await tryRefresh();
+      if (refreshed) {
+        // Retry original request (cookies auto-sent)
+        const retryRes = await fetch(`${API_URL}${endpoint}`, config);
         const retryData = await retryRes.json();
         if (!retryRes.ok) {
           throw new Error(retryData.message || 'Something went wrong');
@@ -90,8 +64,7 @@ const apiRequest = async (endpoint, options = {}) => {
         return retryData;
       }
 
-      // Refresh failed -> clear local auth and throw
-      localStorage.removeItem('token');
+      // Refresh failed -> clear user data and throw
       localStorage.removeItem('user');
       throw new Error('Session expired');
     }
@@ -107,22 +80,17 @@ const apiRequest = async (endpoint, options = {}) => {
   }
 };
 
-// Helper function to make admin API requests (always uses adminToken)
+// Helper function to make admin API requests with HttpOnly cookies
 const adminApiRequest = async (endpoint, options = {}) => {
-  const token = getAuthToken(true); // Get admin token specifically
-  
   const headers = {
     'Content-Type': 'application/json',
     ...options.headers,
   };
 
-  if (token) {
-    headers['Authorization'] = `Bearer ${token}`;
-  }
-
   const config = {
     ...options,
     headers,
+    credentials: 'include', // CRITICAL: Send HttpOnly cookies for admin auth
   };
 
   if (isDev) console.log(`Admin API Request: ${options.method || 'GET'} ${API_URL}${endpoint}`);
@@ -152,9 +120,9 @@ export const authAPI = {
       body: JSON.stringify(userData),
     });
     
-    // Store token in localStorage after registration
-    if (data.token) {
-      localStorage.setItem('token', data.token);
+    // Store user data in localStorage (for UI display)
+    // Tokens are in HttpOnly cookies (NOT accessible via JS)
+    if (data.user) {
       localStorage.setItem('user', JSON.stringify(data.user));
     }
     
@@ -167,9 +135,9 @@ export const authAPI = {
       body: JSON.stringify(credentials),
     });
     
-    // Store token in localStorage
-    if (data.token) {
-      localStorage.setItem('token', data.token);
+    // Store user data in localStorage (for UI display)
+    // Tokens are in HttpOnly cookies (NOT accessible via JS)
+    if (data.user) {
       localStorage.setItem('user', JSON.stringify(data.user));
     }
     
@@ -178,13 +146,13 @@ export const authAPI = {
 
   logout: async () => {
     try {
-      // Call server to revoke refresh token cookie
+      // Call server to revoke refresh token and clear cookies
       await apiRequest('/auth/logout', { method: 'POST' });
     } catch (e) {
       // ignore server errors on logout
       if (isDev) console.warn('Logout request failed', e);
     }
-    localStorage.removeItem('token');
+    // Only remove user data (tokens are HttpOnly cookies)
     localStorage.removeItem('user');
   },
 
@@ -208,7 +176,12 @@ export const authAPI = {
   },
 
   isAuthenticated: () => {
-    return !!getAuthToken();
+    // Check if user exists in localStorage
+    // (Actual auth is via HttpOnly cookie checked by server)
+    if (typeof window !== 'undefined') {
+      return !!localStorage.getItem('user');
+    }
+    return false;
   },
 };
 
@@ -228,7 +201,13 @@ export const productsAPI = {
   },
 
   getCategories: async () => {
-    const response = await apiRequest('/products/categories');
+    const response = await apiRequest('/products/categories', {
+      cache: 'no-store',
+      headers: {
+        'Cache-Control': 'no-cache, no-store, must-revalidate',
+        'Pragma': 'no-cache',
+      },
+    });
     // Backend returns { categories: [...] }
     return response?.categories || response || [];
   },
@@ -264,10 +243,14 @@ export const cartAPI = {
     return apiRequest('/cart');
   },
 
-  add: async (product_id, quantity = 1) => {
+  add: async (product_id, quantity = 1, variant_id = null) => {
+    const body = { product_id, quantity };
+    if (variant_id) {
+      body.variant_id = variant_id;
+    }
     return apiRequest('/cart', {
       method: 'POST',
-      body: JSON.stringify({ product_id, quantity }),
+      body: JSON.stringify(body),
     });
   },
 
@@ -367,6 +350,11 @@ export const adminAPI = {
       body: JSON.stringify({ username, password }),
     });
   },
+  logout: () => {
+    return apiRequest('/admin/logout', {
+      method: 'POST',
+    });
+  },
 
   // Dashboard
   getDashboardStats: () => {
@@ -397,6 +385,12 @@ export const adminAPI = {
     return adminApiRequest(`/admin/orders/${id}/status`, {
       method: 'PATCH',
       body: JSON.stringify({ status }),
+    });
+  },
+  updateOrderPaymentStatus: (id, paymentStatus) => {
+    return adminApiRequest(`/admin/orders/${id}/payment-status`, {
+      method: 'PATCH',
+      body: JSON.stringify({ payment_status: paymentStatus }),
     });
   },
 
@@ -440,9 +434,19 @@ export const adminAPI = {
 
   // Categories Management
   getCategories: async () => {
-    const response = await adminApiRequest('/admin/categories');
+    const response = await adminApiRequest('/admin/categories', {
+      cache: 'no-store',
+      headers: {
+        'Cache-Control': 'no-cache, no-store, must-revalidate',
+        'Pragma': 'no-cache',
+      },
+    });
+    console.log('getCategories raw response:', response); // Debug
     // Backend returns { categories: [...] }
-    return response?.categories || response || [];
+    if (response && response.categories) {
+      return response; // Return the whole object with categories property
+    }
+    return Array.isArray(response) ? { categories: response } : { categories: [] };
   },
   getCategoryById: async (id) => {
     const response = await adminApiRequest(`/admin/categories/${id}`);
@@ -455,11 +459,14 @@ export const adminAPI = {
       body: JSON.stringify(categoryData),
     });
   },
-  updateCategory: (id, categoryData) => {
-    return adminApiRequest(`/admin/categories/${id}`, {
+  updateCategory: async (id, categoryData) => {
+    console.log('updateCategory called with:', { id, categoryData }); // Debug
+    const response = await adminApiRequest(`/admin/categories/${id}`, {
       method: 'PUT',
       body: JSON.stringify(categoryData),
     });
+    console.log('updateCategory response:', response); // Debug
+    return response;
   },
   deleteCategory: (id) => {
     return adminApiRequest(`/admin/categories/${id}`, {
@@ -492,6 +499,63 @@ export const adminAPI = {
   getSubscriptionAnalytics: () => {
     return adminApiRequest('/admin/subscriptions/analytics');
   },
+
+  // Delivery Areas Management
+  getAllDeliveryAreas: async () => {
+    const response = await adminApiRequest('/delivery/admin/areas');
+    return response || { areas: [] };
+  },
+  createDeliveryArea: (areaData) => {
+    return adminApiRequest('/delivery/admin/areas', {
+      method: 'POST',
+      body: JSON.stringify(areaData),
+    });
+  },
+  updateDeliveryArea: (id, areaData) => {
+    return adminApiRequest(`/delivery/admin/areas/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(areaData),
+    });
+  },
+  deleteDeliveryArea: (id) => {
+    return adminApiRequest(`/delivery/admin/areas/${id}`, {
+      method: 'DELETE',
+    });
+  },
+  toggleDeliveryAreaStatus: (id) => {
+    return adminApiRequest(`/delivery/admin/areas/${id}/toggle`, {
+      method: 'PATCH',
+    });
+  },
+  getDeliveryStats: async () => {
+    const response = await adminApiRequest('/delivery/admin/stats');
+    return response || { stats: [] };
+  },
+
+  // Preparation Planning
+  getPreparationQuantities: async (date) => {
+    const response = await adminApiRequest(`/admin/preparation/quantities?date=${date}`);
+    return response || { products: [] };
+  },
+  getMultiDayPreparation: async () => {
+    const response = await adminApiRequest('/admin/preparation/multi-day');
+    return response || { yesterday: {}, today: {}, tomorrow: {} };
+  },
+  getTomorrowOrders: async () => {
+    const response = await adminApiRequest('/admin/preparation/tomorrow');
+    return response || { products: [], tomorrowDate: '', totalOrders: 0, totalProducts: 0, isBeforeCutoff: false };
+  },
+};
+
+// Delivery API (Public)
+export const deliveryAPI = {
+  getAreas: async () => {
+    const response = await apiRequest('/delivery/areas');
+    return response?.areas || [];
+  },
+  checkAvailability: async (areaId) => {
+    return apiRequest(`/delivery/areas/${areaId}/check`);
+  },
 };
 
 export default {
@@ -501,4 +565,5 @@ export default {
   orders: ordersAPI,
   dashboard: dashboardAPI,
   admin: adminAPI,
+  delivery: deliveryAPI,
 };

@@ -6,8 +6,10 @@ import { PulseLoader, BounceLoader, RingLoader } from 'react-spinners';
 export function FullPageLoader({ message = 'Loading...' }) {
   return (
     <div className="fixed inset-0 bg-white bg-opacity-95 backdrop-blur-sm flex items-center justify-center z-50">
-      <div className="text-center">
-        <RingLoader color="#16a34a" size={80} speedMultiplier={0.8} />
+      <div className="flex flex-col items-center justify-center text-center">
+        <div className="flex items-center justify-center">
+          <RingLoader color="#16a34a" size={80} speedMultiplier={0.8} />
+        </div>
         <p className="mt-6 text-gray-700 font-medium animate-pulse">{message}</p>
       </div>
     </div>

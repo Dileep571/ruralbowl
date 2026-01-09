@@ -52,6 +52,19 @@ export default function AdminOrdersPage() {
       setUpdatingOrderId(null);
     }
   };
+  
+  const handlePaymentStatusToggle = async (orderId, currentPaymentStatus) => {
+    const newPaymentStatus = currentPaymentStatus === 'paid' ? 'pending' : 'paid';
+    setUpdatingOrderId(orderId);
+    try {
+      await adminAPI.updateOrderPaymentStatus(orderId, newPaymentStatus);
+      loadOrders();
+    } catch (err) {
+      alert(err.message || 'Failed to update payment status');
+    } finally {
+      setUpdatingOrderId(null);
+    }
+  };
 
   const statusOptions = [
     { value: 'pending', label: 'Pending', color: 'bg-yellow-100 text-yellow-700' },
@@ -125,14 +138,24 @@ export default function AdminOrdersPage() {
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Order ID</th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Customer</th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Date</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Delivery Area</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Expected Delivery</th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Amount</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Payment</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Payment Method</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Payment Status</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Order Status</th>
                     <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">Actions</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-200">
-                  {orders.map((order) => (
+                  {orders.map((order) => {
+                    const deliveryDate = order.expected_delivery_date ? new Date(order.expected_delivery_date) : null;
+                    const today = new Date();
+                    const tomorrow = new Date(today);
+                    tomorrow.setDate(tomorrow.getDate() + 1);
+                    const isTomorrow = deliveryDate && deliveryDate.toDateString() === tomorrow.toDateString();
+                    
+                    return (
                     <tr key={order.id} className="hover:bg-gray-50">
                       <td className="px-6 py-4">
                         <Link
@@ -152,13 +175,49 @@ export default function AdminOrdersPage() {
                         {new Date(order.created_at).toLocaleDateString()}<br />
                         <span className="text-gray-500">{new Date(order.created_at).toLocaleTimeString()}</span>
                       </td>
+                      <td className="px-6 py-4 text-sm">
+                        {order.delivery_area_name ? (
+                          <span className="inline-flex items-center px-2 py-1 bg-blue-50 text-blue-700 rounded text-xs font-medium">
+                            📍 {order.delivery_area_name}
+                          </span>
+                        ) : (
+                          <span className="text-gray-400 text-xs">-</span>
+                        )}
+                      </td>
+                      <td className="px-6 py-4 text-sm">
+                        {deliveryDate ? (
+                          <div>
+                            <div className={`font-medium ${isTomorrow ? 'text-green-700' : 'text-blue-700'}`}>
+                              {isTomorrow ? '🚚 Tomorrow' : '📅 ' + deliveryDate.toLocaleDateString()}
+                            </div>
+                            <div className="text-xs text-gray-500">
+                              {deliveryDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                            </div>
+                          </div>
+                        ) : (
+                          <span className="text-gray-400 text-xs">-</span>
+                        )}
+                      </td>
                       <td className="px-6 py-4 text-sm font-medium text-gray-900">
                         ₹{parseFloat(order.total_amount).toFixed(2)}
                       </td>
                       <td className="px-6 py-4">
                         <span className="text-xs px-2 py-1 bg-gray-100 text-gray-700 rounded capitalize">
-                          {order.payment_method || 'N/A'}
+                          {order.payment_method || 'COD'}
                         </span>
+                      </td>
+                      <td className="px-6 py-4">
+                        <button
+                          onClick={() => handlePaymentStatusToggle(order.id, order.payment_status)}
+                          disabled={updatingOrderId === order.id}
+                          className={`text-xs px-3 py-1.5 rounded font-medium transition-all disabled:opacity-50 disabled:cursor-not-allowed ${
+                            order.payment_status === 'paid'
+                              ? 'bg-green-100 text-green-700 hover:bg-green-200'
+                              : 'bg-orange-100 text-orange-700 hover:bg-orange-200'
+                          }`}
+                        >
+                          {order.payment_status === 'paid' ? '✓ Paid' : '⏳ Unpaid'}
+                        </button>
                       </td>
                       <td className="px-6 py-4">
                         <select
@@ -181,7 +240,8 @@ export default function AdminOrdersPage() {
                         </Link>
                       </td>
                     </tr>
-                  ))}
+                  );
+                  })}
                 </tbody>
               </table>
             </div>

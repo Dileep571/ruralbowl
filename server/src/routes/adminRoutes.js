@@ -5,11 +5,13 @@ const reviewController = require('../controllers/reviewController');
 const couponController = require('../controllers/couponController');
 const analyticsController = require('../controllers/analyticsController');
 const subscriptionController = require('../controllers/subscriptionController');
+const preparationController = require('../controllers/preparationController');
 const { upload } = require('../services/imageUploadService');
 const adminAuth = require('../middleware/adminAuth');
 
 // Public routes
 router.post('/login', adminController.adminLogin);
+router.post('/logout', adminController.adminLogout);
 
 // Protected admin routes
 router.use(adminAuth); // All routes below require admin authentication
@@ -26,6 +28,7 @@ router.put('/users/:id', adminController.updateUser);
 router.get('/orders', adminController.getAllOrders);
 router.get('/orders/:id', adminController.getOrderById);
 router.patch('/orders/:id/status', adminController.updateOrderStatus);
+router.patch('/orders/:id/payment-status', adminController.updateOrderPaymentStatus);
 
 // Products Management
 router.get('/products', adminController.getAllProducts);
@@ -82,5 +85,10 @@ router.post('/subscriptions/plans', subscriptionController.createSubscriptionPla
 router.put('/subscriptions/plans/:id', subscriptionController.updateSubscriptionPlan);
 router.delete('/subscriptions/plans/:id', subscriptionController.deleteSubscriptionPlan);
 router.post('/subscriptions/process-deliveries', subscriptionController.processDeliveries);
+
+// Preparation Planning
+router.get('/preparation/quantities', preparationController.getPreparationQuantities);
+router.get('/preparation/multi-day', preparationController.getMultiDayPreparation);
+router.get('/preparation/tomorrow', preparationController.getTomorrowOrders);
 
 module.exports = router;

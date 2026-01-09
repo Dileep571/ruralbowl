@@ -19,7 +19,10 @@ export default function CategoriesPage() {
     name: '',
     slug: '',
     description: '',
+    image_url: '',
   });
+  const [uploading, setUploading] = useState(false);
+  const [imagePreview, setImagePreview] = useState('');
 
   useEffect(() => {
     loadCategories();
@@ -29,8 +32,13 @@ export default function CategoriesPage() {
     try {
       setLoading(true);
       const data = await adminAPI.getCategories();
-      setCategories(data.categories || []);
+      console.log('Categories API response:', data); // Debug log
+      // adminAPI.getCategories returns { categories: [...] } or [...]
+      const categoriesArray = Array.isArray(data) ? data : (data.categories || []);
+      console.log('Categories array:', categoriesArray); // Debug log
+      setCategories(categoriesArray);
     } catch (err) {
+      console.error('Load categories error:', err);
       setError(err.message || 'Failed to load categories');
     } finally {
       setLoading(false);
@@ -44,10 +52,13 @@ export default function CategoriesPage() {
         name: category.name,
         slug: category.slug,
         description: category.description || '',
+        image_url: category.image_url || '',
       });
+      setImagePreview(category.image_url || '');
     } else {
       setEditingCategory(null);
-      setFormData({ name: '', slug: '', description: '' });
+      setFormData({ name: '', slug: '', description: '', image_url: '' });
+      setImagePreview('');
     }
     setShowModal(true);
     setError('');
@@ -56,7 +67,8 @@ export default function CategoriesPage() {
   const handleCloseModal = () => {
     setShowModal(false);
     setEditingCategory(null);
-    setFormData({ name: '', slug: '', description: '' });
+    setFormData({ name: '', slug: '', description: '', image_url: '' });
+    setImagePreview('');
     setError('');
   };
 
@@ -69,6 +81,71 @@ export default function CategoriesPage() {
       const slug = value.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
       setFormData(prev => ({ ...prev, slug }));
     }
+  };
+
+  const handleImageUpload = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    // Validate file type
+    if (!file.type.startsWith('image/')) {
+      toast.error('Please select an image file');
+      return;
+    }
+
+    // Validate file size (5MB max)
+    if (file.size > 5 * 1024 * 1024) {
+      toast.error('Image size must be less than 5MB');
+      return;
+    }
+
+    try {
+      setUploading(true);
+      const uploadFormData = new FormData(); // Renamed to avoid conflict
+      uploadFormData.append('image', file);
+
+      const token = localStorage.getItem('adminToken');
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api'}/admin/upload/image`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+        },
+        body: uploadFormData,
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.message || 'Upload failed');
+      }
+
+      const data = await response.json();
+      console.log('Image upload successful:', data); // Debug
+      
+      // Extract image URL from response (API returns data.image.url)
+      const imageUrl = data.image?.url || data.url;
+      
+      if (!imageUrl) {
+        throw new Error('No image URL in response');
+      }
+      
+      // Update form data with new image URL
+      setFormData(prev => {
+        console.log('Setting image_url in formData:', imageUrl); // Debug
+        return { ...prev, image_url: imageUrl };
+      });
+      setImagePreview(imageUrl);
+      toast.success('Image uploaded successfully');
+    } catch (error) {
+      console.error('Image upload error:', error);
+      toast.error(error.message || 'Failed to upload image');
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const handleRemoveImage = () => {
+    setFormData(prev => ({ ...prev, image_url: '' }));
+    setImagePreview('');
   };
 
   const handleSubmit = async (e) => {
@@ -92,15 +169,19 @@ export default function CategoriesPage() {
 
     setSubmitting(true);
     try {
+      console.log('Submitting category data:', formData); // Debug
       if (editingCategory) {
-        await adminAPI.updateCategory(editingCategory.id, formData);
+        console.log('Updating category ID:', editingCategory.id); // Debug
+        const response = await adminAPI.updateCategory(editingCategory.id, formData);
+        console.log('Update response:', response); // Debug
         toast.success('Category updated successfully');
       } else {
-        await adminAPI.createCategory(formData);
+        const response = await adminAPI.createCategory(formData);
+        console.log('Create response:', response); // Debug
         toast.success('Category created successfully');
       }
       handleCloseModal();
-      loadCategories();
+      await loadCategories(); // Make it await to ensure refresh
     } catch (err) {
       toast.error(err.message || 'Operation failed');
     } finally {
@@ -125,6 +206,8 @@ export default function CategoriesPage() {
   if (loading) {
     return <div className="text-center py-20">Loading categories...</div>;
   }
+
+  console.log('Rendering categories, count:', categories.length); // Debug log
 
   return (
     <div>
@@ -152,13 +235,23 @@ export default function CategoriesPage() {
         {categories.map((category) => (
           <div key={category.id} className="bg-white rounded-lg shadow p-6 hover:shadow-lg transition-shadow">
             <div className="flex justify-between items-start mb-4">
-              <div>
-                <h3 className="text-lg font-semibold text-gray-900">{category.name}</h3>
-                <p className="text-sm text-gray-500">/{category.slug}</p>
+              <div className="flex items-center gap-3">
+                {category.image_url ? (
+                  <img 
+                    src={category.image_url} 
+                    alt={category.name}
+                    className="w-12 h-12 object-cover rounded-lg"
+                  />
+                ) : (
+                  <span className="text-2xl bg-green-50 w-12 h-12 flex items-center justify-center rounded-lg">
+                    📁
+                  </span>
+                )}
+                <div>
+                  <h3 className="text-lg font-semibold text-gray-900">{category.name}</h3>
+                  <p className="text-sm text-gray-500">/{category.slug}</p>
+                </div>
               </div>
-              <span className="text-2xl bg-green-50 w-12 h-12 flex items-center justify-center rounded-lg">
-                📁
-              </span>
             </div>
 
             {category.description && (
@@ -226,6 +319,59 @@ export default function CategoriesPage() {
             <form onSubmit={handleSubmit} className="space-y-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Category Image
+                </label>
+                <div className="space-y-3">
+                  {imagePreview && (
+                    <div className="relative inline-block">
+                      <img 
+                        src={imagePreview} 
+                        alt="Preview" 
+                        className="w-32 h-32 object-cover rounded-lg border-2 border-gray-200"
+                      />
+                      <button
+                        type="button"
+                        onClick={handleRemoveImage}
+                        className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full w-6 h-6 flex items-center justify-center hover:bg-red-600"
+                      >
+                        ✕
+                      </button>
+                    </div>
+                  )}
+                  <div>
+                    <label className="cursor-pointer">
+                      <div className="flex items-center justify-center w-full px-4 py-3 border-2 border-dashed border-gray-300 rounded-lg hover:border-green-500 transition-colors">
+                        <div className="text-center">
+                          {uploading ? (
+                            <div className="text-gray-600">
+                              <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-green-600 mx-auto mb-2"></div>
+                              <span className="text-sm">Uploading...</span>
+                            </div>
+                          ) : (
+                            <>
+                              <svg className="mx-auto h-8 w-8 text-gray-400" stroke="currentColor" fill="none" viewBox="0 0 48 48">
+                                <path d="M28 8H12a4 4 0 00-4 4v20m32-12v8m0 0v8a4 4 0 01-4 4H12a4 4 0 01-4-4v-4m32-4l-3.172-3.172a4 4 0 00-5.656 0L28 28M8 32l9.172-9.172a4 4 0 015.656 0L28 28m0 0l4 4m4-24h8m-4-4v8m-12 4h.02" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                              </svg>
+                              <p className="mt-1 text-sm text-gray-600">Click to upload image</p>
+                              <p className="text-xs text-gray-500">PNG, JPG up to 5MB</p>
+                            </>
+                          )}
+                        </div>
+                      </div>
+                      <input
+                        type="file"
+                        accept="image/*"
+                        onChange={handleImageUpload}
+                        className="hidden"
+                        disabled={uploading}
+                      />
+                    </label>
+                  </div>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
                   Category Name *
                 </label>
                 <input
@@ -274,15 +420,18 @@ export default function CategoriesPage() {
                   type="button"
                   onClick={handleCloseModal}
                   className="flex-1 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50"
+                  disabled={submitting || uploading}
                 >
                   Cancel
                 </button>
-                <button
+                <LoadingButton
                   type="submit"
-                  className="flex-1 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700"
+                  loading={submitting}
+                  disabled={uploading}
+                  className="flex-1 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50"
                 >
                   {editingCategory ? 'Update' : 'Create'}
-                </button>
+                </LoadingButton>
               </div>
             </form>
           </div>

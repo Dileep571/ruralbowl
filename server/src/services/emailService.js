@@ -39,6 +39,57 @@ if (isEmailConfigured) {
 
 // Email templates
 const templates = {
+  // OTP verification email for signup
+  otpVerification: (otp) => ({
+    subject: 'Verify Your Email - RuralBowl 🔐',
+    html: `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <style>
+          body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
+          .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+          .header { background: linear-gradient(135deg, #22c55e 0%, #16a34a 100%); color: white; padding: 30px; text-align: center; border-radius: 10px 10px 0 0; }
+          .content { padding: 30px; background: #f9f9f9; border-radius: 0 0 10px 10px; }
+          .otp-box { background: white; border: 2px dashed #22c55e; padding: 20px; text-align: center; margin: 20px 0; border-radius: 10px; }
+          .otp-code { font-size: 36px; font-weight: bold; color: #22c55e; letter-spacing: 8px; font-family: monospace; }
+          .warning { background: #fef3c7; border-left: 4px solid #f59e0b; padding: 12px; margin: 20px 0; border-radius: 5px; }
+          .footer { text-align: center; padding: 20px; color: #666; font-size: 12px; }
+        </style>
+      </head>
+      <body>
+        <div class="container">
+          <div class="header">
+            <h1>🔐 Email Verification</h1>
+            <p>RuralBowl - Fresh from Farm</p>
+          </div>
+          <div class="content">
+            <h2>Verify Your Email Address</h2>
+            <p>Thank you for signing up with RuralBowl! Please use the following OTP to complete your registration:</p>
+            
+            <div class="otp-box">
+              <p style="margin: 0; color: #666; font-size: 14px;">Your OTP Code</p>
+              <div class="otp-code">${otp}</div>
+              <p style="margin: 10px 0 0 0; color: #666; font-size: 12px;">Valid for 10 minutes</p>
+            </div>
+            
+            <div class="warning">
+              <strong>⚠️ Security Note:</strong> Never share this OTP with anyone. RuralBowl will never ask for your OTP via phone or email.
+            </div>
+            
+            <p>If you didn't request this code, please ignore this email.</p>
+          </div>
+          <div class="footer">
+            <p>© ${new Date().getFullYear()} RuralBowl. All rights reserved.</p>
+            <p>This is an automated email. Please do not reply.</p>
+          </div>
+        </div>
+      </body>
+      </html>
+    `,
+    text: `Your RuralBowl verification code is: ${otp}\n\nThis code will expire in 10 minutes.\n\nIf you didn't request this code, please ignore this email.`
+  }),
+
   // Welcome email for new users
   welcome: (user) => ({
     subject: 'Welcome to RuralBowl! 🌾',
@@ -628,6 +679,11 @@ module.exports = {
   sendEmail,
   templates,
   isEmailConfigured,
+  
+  // OTP Email
+  sendOTPEmail: async (to, otp) => {
+    return sendEmail(to, templates.otpVerification(otp));
+  },
   
   // User Journey Emails
   sendWelcomeEmail: async (to, user) => {

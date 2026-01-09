@@ -54,12 +54,54 @@ const register = async (req, res) => {
       return res.status(400).json({ errors: errors.array() });
     }
 
-    const { name, email, password, phone, address } = req.body;
+    let { name, email, password, phone, address } = req.body;
+    
+    // Normalize email (trim and lowercase)
+    email = email.trim().toLowerCase();
+    
+    // Additional email validation
+    const emailRegex = /^[a-zA-Z0-9]([a-zA-Z0-9._-]*[a-zA-Z0-9])?@[a-zA-Z0-9]([a-zA-Z0-9-]*[a-zA-Z0-9])?(\.[a-zA-Z]{2,})+$/;
+    if (!emailRegex.test(email)) {
+      return res.status(400).json({ message: 'Invalid email format' });
+    }
+    
+    // Check email length constraints
+    if (email.length > 254) {
+      return res.status(400).json({ message: 'Email address is too long' });
+    }
+    
+    const [localPart, domain] = email.split('@');
+    if (localPart.length > 64) {
+      return res.status(400).json({ message: 'Email address is invalid' });
+    }
+    
+    // Check for invalid characters and patterns
+    if (email.includes('..') || localPart.startsWith('.') || localPart.endsWith('.')) {
+      return res.status(400).json({ message: 'Email address contains invalid characters' });
+    }
 
     // Check if user already exists
     const userExists = await db.query('SELECT * FROM users WHERE email = $1', [email]);
     if (userExists.rows.length > 0) {
-      return res.status(400).json({ message: 'User already exists' });
+      return res.status(400).json({ message: 'User already exists with this email address' });
+    }
+    
+    // Check if email is verified via OTP
+    const otpVerified = await db.query(
+      'SELECT * FROM email_otp WHERE email = $1 AND verified = true ORDER BY created_at DESC LIMIT 1',
+      [email]
+    );
+    
+    if (otpVerified.rows.length === 0) {
+      return res.status(400).json({ message: 'Email not verified. Please verify your email first.' });
+    }
+    
+    // Check if OTP verification is still valid (within 1 hour)
+    const otpRecord = otpVerified.rows[0];
+    const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000);
+    if (new Date(otpRecord.created_at) < oneHourAgo) {
+      await db.query('DELETE FROM email_otp WHERE id = $1', [otpRecord.id]);
+      return res.status(400).json({ message: 'Email verification expired. Please verify again.' });
     }
 
     // Hash password
@@ -81,18 +123,29 @@ const register = async (req, res) => {
     const expiresAt = new Date(Date.now() + refreshExpiryDays * 24 * 60 * 60 * 1000);
     await saveRefreshToken(user.id, refreshToken, expiresAt);
 
-    // Set cookie
+    // Set access token cookie (10-15 minutes)
+    const accessTokenExpiry = parseInt(process.env.ACCESS_TOKEN_COOKIE_MINUTES || '15', 10);
+    res.cookie('accessToken', token, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax',
+      maxAge: accessTokenExpiry * 60 * 1000,
+      path: '/'
+    });
+
+    // Set refresh token cookie
     res.cookie('refreshToken', refreshToken, {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
       sameSite: 'lax',
       maxAge: refreshExpiryDays * 24 * 60 * 60 * 1000,
+      path: '/auth/refresh'
     });
 
-    // Send response immediately
+    // Send response immediately (NO TOKEN IN BODY)
     res.status(201).json({
+      success: true,
       message: 'User registered successfully',
-      token,
       user: {
         id: user.id,
         name: user.name,
@@ -153,17 +206,28 @@ const login = async (req, res) => {
     const expiresAt = new Date(Date.now() + refreshExpiryDays * 24 * 60 * 60 * 1000);
     await saveRefreshToken(user.id, refreshToken, expiresAt);
 
+    // Set access token cookie (10-15 minutes)
+    const accessTokenExpiry = parseInt(process.env.ACCESS_TOKEN_COOKIE_MINUTES || '15', 10);
+    res.cookie('accessToken', token, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax',
+      maxAge: accessTokenExpiry * 60 * 1000,
+      path: '/'
+    });
+
     // Set refresh token cookie
     res.cookie('refreshToken', refreshToken, {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
       sameSite: 'lax',
       maxAge: refreshExpiryDays * 24 * 60 * 60 * 1000,
+      path: '/auth/refresh'
     });
 
     res.json({
+      success: true,
       message: 'Login successful',
-      token,
       user: {
         id: user.id,
         name: user.name,
@@ -211,15 +275,26 @@ const refreshAccessToken = async (req, res) => {
     await saveRefreshToken(user.id, newRefreshToken, expiresAt);
     await revokeRefreshToken(refreshToken);
 
-    // Set new cookie
+    // Set new access token cookie (10-15 minutes)
+    const accessTokenExpiry = parseInt(process.env.ACCESS_TOKEN_COOKIE_MINUTES || '15', 10);
+    res.cookie('accessToken', accessToken, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax',
+      maxAge: accessTokenExpiry * 60 * 1000,
+      path: '/'
+    });
+
+    // Set new refresh token cookie
     res.cookie('refreshToken', newRefreshToken, {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
       sameSite: 'lax',
       maxAge: refreshExpiryDays * 24 * 60 * 60 * 1000,
+      path: '/auth/refresh'
     });
 
-    res.json({ token: accessToken });
+    res.json({ success: true, message: 'Token refreshed' });
   } catch (error) {
     console.error('Refresh token error:', error);
     res.status(500).json({ message: 'Server error' });
@@ -234,8 +309,10 @@ const logout = async (req, res) => {
       await revokeRefreshToken(refreshToken);
     }
 
-    res.clearCookie('refreshToken');
-    res.json({ message: 'Logged out' });
+    // Clear both cookies
+    res.clearCookie('accessToken', { path: '/' });
+    res.clearCookie('refreshToken', { path: '/auth/refresh' });
+    res.json({ success: true, message: 'Logged out' });
   } catch (error) {
     console.error('Logout error:', error);
     res.status(500).json({ message: 'Server error' });
@@ -282,6 +359,102 @@ const updateProfile = async (req, res) => {
   }
 };
 
+// Request Password Reset
+const forgotPassword = async (req, res) => {
+  try {
+    const { email } = req.body;
+
+    if (!email) {
+      return res.status(400).json({ message: 'Email is required' });
+    }
+
+    // Find user by email
+    const userResult = await db.query('SELECT * FROM users WHERE email = $1', [email]);
+    
+    if (userResult.rows.length === 0) {
+      // Return success even if user doesn't exist (security best practice)
+      return res.json({ 
+        message: 'If an account with that email exists, a password reset link has been sent.' 
+      });
+    }
+
+    const user = userResult.rows[0];
+
+    // Generate reset token
+    const resetToken = crypto.randomBytes(32).toString('hex');
+    const hashedToken = hashToken(resetToken);
+    const expiresAt = new Date(Date.now() + 60 * 60 * 1000); // 1 hour
+
+    // Save reset token to database
+    await db.query(
+      'INSERT INTO password_reset_tokens (user_id, token, expires_at) VALUES ($1, $2, $3) ON CONFLICT (user_id) DO UPDATE SET token = $2, expires_at = $3, used = false',
+      [user.id, hashedToken, expiresAt]
+    );
+
+    // Send reset email (don't await to avoid blocking)
+    emailService.sendPasswordReset(user.email, user, resetToken)
+      .catch(err => console.error('Password reset email error:', err));
+
+    res.json({ 
+      message: 'If an account with that email exists, a password reset link has been sent.' 
+    });
+  } catch (error) {
+    console.error('Forgot password error:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+};
+
+// Reset Password
+const resetPassword = async (req, res) => {
+  try {
+    const { token, password } = req.body;
+
+    if (!token || !password) {
+      return res.status(400).json({ message: 'Token and new password are required' });
+    }
+
+    if (password.length < 6) {
+      return res.status(400).json({ message: 'Password must be at least 6 characters' });
+    }
+
+    // Hash the token to find it in database
+    const hashedToken = hashToken(token);
+
+    // Find valid reset token
+    const tokenResult = await db.query(
+      'SELECT * FROM password_reset_tokens WHERE token = $1 AND expires_at > NOW() AND used = false',
+      [hashedToken]
+    );
+
+    if (tokenResult.rows.length === 0) {
+      return res.status(400).json({ message: 'Invalid or expired reset token' });
+    }
+
+    const resetRecord = tokenResult.rows[0];
+
+    // Hash new password
+    const salt = await bcrypt.genSalt(10);
+    const hashedPassword = await bcrypt.hash(password, salt);
+
+    // Update user password
+    await db.query(
+      'UPDATE users SET password = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2',
+      [hashedPassword, resetRecord.user_id]
+    );
+
+    // Mark token as used
+    await db.query(
+      'UPDATE password_reset_tokens SET used = true WHERE id = $1',
+      [resetRecord.id]
+    );
+
+    res.json({ message: 'Password reset successfully. You can now login with your new password.' });
+  } catch (error) {
+    console.error('Reset password error:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+};
+
 module.exports = {
   register,
   login,
@@ -289,4 +462,6 @@ module.exports = {
   logout,
   getMe,
   updateProfile,
+  forgotPassword,
+  resetPassword,
 };

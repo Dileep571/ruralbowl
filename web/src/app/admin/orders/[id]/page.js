@@ -26,9 +26,7 @@ export default function AdminOrderDetailPage() {
       setLoading(true);
       setError('');
       const response = await fetch(`http://localhost:5000/api/admin/orders/${orderId}`, {
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('adminToken')}`,
-        },
+        credentials: 'include',
       });
       
       if (!response.ok) {

@@ -6,7 +6,7 @@ const getSubscriptionPlans = async (req, res) => {
   try {
     const result = await db.query(
       `SELECT id, name, description, price, validity_days, total_deliveries, 
-              delivery_frequency, default_delivery_days, items, discount_percentage
+              delivery_frequency, default_delivery_days, items, discount_percentage, coming_soon
        FROM subscription_plans 
        WHERE is_active = true 
        ORDER BY price ASC`
@@ -17,6 +17,7 @@ const getSubscriptionPlans = async (req, res) => {
         ...plan,
         price: parseFloat(plan.price),
         discount_percentage: parseFloat(plan.discount_percentage),
+        coming_soon: plan.coming_soon || false,
       })),
     });
   } catch (error) {
@@ -825,7 +826,7 @@ const getAllSubscriptionPlans = async (req, res) => {
     const result = await db.query(
       `SELECT id, name, description, price, validity_days, total_deliveries, 
               delivery_frequency, default_delivery_days, items, discount_percentage,
-              is_active, created_at, updated_at,
+              is_active, coming_soon, created_at, updated_at,
               validity_days as duration_days
        FROM subscription_plans 
        ORDER BY is_active DESC, price ASC`
@@ -838,6 +839,7 @@ const getAllSubscriptionPlans = async (req, res) => {
       discount_percentage: parseFloat(plan.discount_percentage || 0),
       features: plan.items ? (Array.isArray(plan.items) ? plan.items : [plan.items]) : [],
       duration_days: plan.validity_days,
+      coming_soon: plan.coming_soon || false,
     }));
 
     res.json({ plans });
@@ -861,6 +863,8 @@ const createSubscriptionPlan = async (req, res) => {
       items,
       discount_percentage = 0,
       max_reschedules_per_delivery = 3,
+      is_active = true,
+      coming_soon = false,
     } = req.body;
 
     if (!name || !price || !total_deliveries || !items) {
@@ -872,8 +876,8 @@ const createSubscriptionPlan = async (req, res) => {
     const result = await db.query(
       `INSERT INTO subscription_plans 
        (name, description, price, validity_days, total_deliveries, delivery_frequency, 
-        default_delivery_days, items, discount_percentage, max_reschedules_per_delivery)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+        default_delivery_days, items, discount_percentage, max_reschedules_per_delivery, is_active, coming_soon)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
        RETURNING *`,
       [
         name,
@@ -886,6 +890,8 @@ const createSubscriptionPlan = async (req, res) => {
         JSON.stringify(items),
         discount_percentage,
         max_reschedules_per_delivery,
+        is_active,
+        coming_soon,
       ]
     );
 
@@ -915,6 +921,7 @@ const updateSubscriptionPlan = async (req, res) => {
       discount_percentage,
       max_reschedules_per_delivery,
       is_active,
+      coming_soon,
     } = req.body;
 
     const result = await db.query(
@@ -930,8 +937,9 @@ const updateSubscriptionPlan = async (req, res) => {
            discount_percentage = COALESCE($9, discount_percentage),
            max_reschedules_per_delivery = COALESCE($10, max_reschedules_per_delivery),
            is_active = COALESCE($11, is_active),
+           coming_soon = COALESCE($12, coming_soon),
            updated_at = CURRENT_TIMESTAMP
-       WHERE id = $12
+       WHERE id = $13
        RETURNING *`,
       [
         name,
@@ -945,6 +953,7 @@ const updateSubscriptionPlan = async (req, res) => {
         discount_percentage,
         max_reschedules_per_delivery,
         is_active,
+        coming_soon,
         id,
       ]
     );

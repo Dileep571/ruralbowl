@@ -54,6 +54,34 @@ export const CartProvider = ({ children }) => {
     }
   }, []);
 
+  // Listen for auth state changes
+  useEffect(() => {
+    const handleLogin = () => {
+      // When user logs in, merge guest cart and load server cart
+      if (isAuthenticated()) {
+        mergeGuestCartToServer();
+      }
+    };
+
+    const handleLogout = () => {
+      // When user logs out, clear cart and load guest cart
+      setCart([]);
+      setCartCount(0);
+      clearGuestCart();
+      loadGuestCartFromStorage();
+    };
+
+    if (typeof window !== 'undefined') {
+      window.addEventListener('auth:login', handleLogin);
+      window.addEventListener('auth:logout', handleLogout);
+
+      return () => {
+        window.removeEventListener('auth:login', handleLogin);
+        window.removeEventListener('auth:logout', handleLogout);
+      };
+    }
+  }, []);
+
   const loadGuestCartFromStorage = () => {
     const guestCart = getGuestCart();
     setCart(guestCart);
@@ -94,8 +122,8 @@ export const CartProvider = ({ children }) => {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${typeof window !== 'undefined' ? localStorage.getItem('token') : ''}`,
         },
+        credentials: 'include', // Send HttpOnly cookies
         body: JSON.stringify({ items }),
       });
 
@@ -125,9 +153,14 @@ export const CartProvider = ({ children }) => {
         setLoading(true);
         const guestCart = getGuestCart();
         
-        // Check if product already in cart
+        // Check if product already in cart (considering variant if present)
         const existingIndex = guestCart.findIndex(
-          item => (item.product?.id || item.product_id) === product.id
+          item => {
+            const itemProductId = item.product?.id || item.product_id;
+            const itemVariantId = item.variant_id || null;
+            const productVariantId = product.variant_id || null;
+            return itemProductId === product.id && itemVariantId === productVariantId;
+          }
         );
 
         let updatedCart;
@@ -140,6 +173,7 @@ export const CartProvider = ({ children }) => {
           updatedCart = [...guestCart, {
             id: `guest_${Date.now()}`, // Temporary ID for guest items
             product_id: product.id,
+            variant_id: product.variant_id || null,
             quantity,
             product: {
               id: product.id,
@@ -147,7 +181,8 @@ export const CartProvider = ({ children }) => {
               price: product.price,
               unit: product.unit,
               image_url: product.image_url,
-              stock_quantity: product.stock_quantity
+              stock_quantity: product.stock_quantity,
+              has_variants: product.has_variants
             }
           }];
         }
@@ -170,7 +205,7 @@ export const CartProvider = ({ children }) => {
     // Authenticated user: use server API
     try {
       setLoading(true);
-      const result = await addToCartAPI(product.id, quantity);
+      const result = await addToCartAPI(product.id, quantity, product.variant_id);
       if (result.success) {
         await loadServerCart();
         toast.success(`${product.name} added to cart!`);
@@ -245,13 +280,13 @@ export const CartProvider = ({ children }) => {
     }
   };
 
-  const clearCart = async () => {
+  const clearCart = async (showMessage = true) => {
     if (!isAuthenticated()) {
       // Guest cart: clear localStorage
       clearGuestCart();
       setCart([]);
       setCartCount(0);
-      toast.success('Cart cleared');
+      if (showMessage) toast.success('Cart cleared');
       return;
     }
 
@@ -261,11 +296,11 @@ export const CartProvider = ({ children }) => {
       if (result.success) {
         setCart([]);
         setCartCount(0);
-        toast.success('Cart cleared');
+        if (showMessage) toast.success('Cart cleared');
       }
     } catch (error) {
       console.error('Error clearing cart:', error);
-      toast.error('Failed to clear cart');
+      if (showMessage) toast.error('Failed to clear cart');
     }
   };
 

@@ -28,9 +28,9 @@ export const getCartTotal = async () => {
   }
 };
 
-export const addToCart = async (productId, quantity = 1) => {
+export const addToCart = async (productId, quantity = 1, variantId = null) => {
   try {
-    const data = await cartAPI.add(productId, quantity);
+    const data = await cartAPI.add(productId, quantity, variantId);
     return { success: true, data };
   } catch (error) {
     console.error('Error adding to cart:', error);

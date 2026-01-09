@@ -3,14 +3,22 @@ import { useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useCart } from '@/components/CartProvider';
+import { useAuth } from '@/components/AuthProvider';
 import { useToast } from '@/components/ToastProvider';
+import api from '@/lib/authApi';
 import { SectionLoader, LoadingButton } from '@/components/LoadingSpinner';
+import { Heart } from 'lucide-react';
+import AuthRequiredModal from '@/components/AuthRequiredModal';
 
 export default function CartPage() {
   const router = useRouter();
   const toast = useToast();
+  const { isAuthenticated } = useAuth();
   const { cart: items, loading, updateQuantity: updateQty, removeFromCart, clearCart: clearCartFn, getCartTotal } = useCart();
   const [updatingId, setUpdatingId] = useState(null);
+  const [wishlistLoading, setWishlistLoading] = useState({});
+  const [removeModal, setRemoveModal] = useState({ open: false, item: null });
+  const [showAuthModal, setShowAuthModal] = useState(false);
 
   const subtotal = useMemo(() => {
     return (items || []).reduce((sum, it) => {
@@ -33,11 +41,60 @@ export default function CartPage() {
     setUpdatingId(item.id);
     await removeFromCart(item.id);
     setUpdatingId(null);
+    setRemoveModal({ open: false, item: null });
+  };
+  
+  const openRemoveModal = (item) => {
+    setRemoveModal({ open: true, item });
+  };
+  
+  const moveToWishlist = async (item) => {
+    if (!api.isAuthenticated()) {
+      toast.warning('Please login to add to wishlist');
+      return;
+    }
+    
+    // Get product ID from item - check multiple possible locations
+    const productId = item.product_id || item.product?.id || item.id;
+    
+    if (!productId) {
+      toast.error('Unable to identify product');
+      return;
+    }
+    
+    setWishlistLoading(prev => ({ ...prev, [item.id]: true }));
+    try {
+      await api.addToWishlist(productId);
+      await removeFromCart(item.id);
+      toast.success('Moved to wishlist!');
+      setRemoveModal({ open: false, item: null });
+    } catch (error) {
+      console.error('Move to wishlist error:', error);
+      const errorMsg = error?.message || '';
+      if (errorMsg.toLowerCase().includes('already in wishlist')) {
+        // Product already in wishlist, just remove from cart
+        await removeFromCart(item.id);
+        toast.info('Product was already in wishlist. Removed from cart.');
+        setRemoveModal({ open: false, item: null });
+      } else {
+        toast.error('Failed to move to wishlist');
+      }
+    } finally {
+      setWishlistLoading(prev => ({ ...prev, [item.id]: false }));
+    }
   };
 
   const clearCart = async () => {
     if (!items.length) return;
     await clearCartFn();
+  };
+
+  const handleCheckout = () => {
+    if (!isAuthenticated) {
+      setShowAuthModal(true);
+      return;
+    }
+    router.push('/checkout');
   };
 
   const deliveryCharge = subtotal > 500 ? 0 : 50;
@@ -80,38 +137,40 @@ export default function CartPage() {
 
               return (
                 <div key={item.id} className="bg-white p-4 rounded-lg shadow border">
-                  <div className="flex gap-4">
-                    <img src={imageUrl} alt={name} className="w-20 h-20 object-cover rounded" />
-                    <div className="flex-1">
-                      <h3 className="font-semibold text-gray-900">{name}</h3>
-                      <p className="text-green-600 font-bold">₹{price}/{unit}</p>
-                      <div className="flex items-center gap-2 mt-2">
+                  <div className="flex gap-3 sm:gap-4">
+                    <img src={imageUrl} alt={name} className="w-16 h-16 sm:w-20 sm:h-20 object-cover rounded flex-shrink-0" />
+                    <div className="flex-1 min-w-0">
+                      <h3 className="font-semibold text-gray-900 text-sm sm:text-base truncate">{name}</h3>
+                      <p className="text-green-600 font-bold text-sm sm:text-base">₹{price}/{unit}</p>
+                      <div className="flex items-center gap-2 mt-2 flex-wrap">
+                        <div className="flex items-center gap-2">
+                          <button
+                            onClick={() => updateQuantity(item, item.quantity - 1)}
+                            disabled={isUpdating}
+                            className="w-7 h-7 sm:w-8 sm:h-8 border rounded hover:bg-gray-100 disabled:opacity-50 text-sm"
+                          >
+                            -
+                          </button>
+                          <span className="w-8 text-center text-sm sm:text-base">{item.quantity}</span>
+                          <button
+                            onClick={() => updateQuantity(item, item.quantity + 1)}
+                            disabled={isUpdating}
+                            className="w-7 h-7 sm:w-8 sm:h-8 border rounded hover:bg-gray-100 disabled:opacity-50 text-sm"
+                          >
+                            +
+                          </button>
+                        </div>
                         <button
-                          onClick={() => updateQuantity(item, item.quantity - 1)}
+                          onClick={() => openRemoveModal(item)}
                           disabled={isUpdating}
-                          className="w-8 h-8 border rounded hover:bg-gray-100 disabled:opacity-50"
-                        >
-                          -
-                        </button>
-                        <span className="w-8 text-center">{item.quantity}</span>
-                        <button
-                          onClick={() => updateQuantity(item, item.quantity + 1)}
-                          disabled={isUpdating}
-                          className="w-8 h-8 border rounded hover:bg-gray-100 disabled:opacity-50"
-                        >
-                          +
-                        </button>
-                        <button
-                          onClick={() => removeItem(item)}
-                          disabled={isUpdating}
-                          className="ml-auto text-red-600 hover:text-red-700 text-sm"
+                          className="text-red-600 hover:text-red-700 text-xs sm:text-sm"
                         >
                           Remove
                         </button>
                       </div>
                     </div>
-                    <div className="text-right">
-                      <p className="font-bold">₹{(price * item.quantity).toFixed(2)}</p>
+                    <div className="text-right flex-shrink-0 ml-2">
+                      <p className="font-bold text-sm sm:text-base whitespace-nowrap">₹{(price * item.quantity).toFixed(2)}</p>
                     </div>
                   </div>
                 </div>
@@ -144,7 +203,7 @@ export default function CartPage() {
                 </div>
               </div>
               <button
-                onClick={() => router.push('/checkout')}
+                onClick={handleCheckout}
                 disabled={!items.length}
                 className="w-full bg-green-600 text-white py-3 rounded-lg hover:bg-green-700 font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
               >
@@ -154,6 +213,48 @@ export default function CartPage() {
           </div>
         </div>
       )}
+
+      {/* Remove Item Modal */}
+      {removeModal.open && removeModal.item && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg max-w-md w-full p-6">
+            <h3 className="text-lg font-semibold mb-4">Remove Item</h3>
+            <p className="text-gray-600 mb-6">
+              What would you like to do with "{removeModal.item.product?.name || removeModal.item.name}"?
+            </p>
+            <div className="flex flex-col gap-3">
+              <button
+                onClick={() => moveToWishlist(removeModal.item)}
+                disabled={wishlistLoading[removeModal.item.id]}
+                className="w-full py-3 px-4 bg-green-600 text-white rounded-lg hover:bg-green-700 font-semibold disabled:opacity-50 flex items-center justify-center gap-2"
+              >
+                <Heart className="w-4 h-4" />
+                {wishlistLoading[removeModal.item.id] ? 'Moving...' : 'Move to Wishlist'}
+              </button>
+              <button
+                onClick={() => removeItem(removeModal.item)}
+                disabled={updatingId === removeModal.item.id}
+                className="w-full py-3 px-4 bg-red-600 text-white rounded-lg hover:bg-red-700 font-semibold disabled:opacity-50"
+              >
+                {updatingId === removeModal.item.id ? 'Removing...' : 'Remove from Cart'}
+              </button>
+              <button
+                onClick={() => setRemoveModal({ open: false, item: null })}
+                className="w-full py-3 px-4 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 font-semibold"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Auth Required Modal */}
+      <AuthRequiredModal 
+        isOpen={showAuthModal} 
+        onClose={() => setShowAuthModal(false)}
+        redirectTo="/checkout"
+      />
     </div>
   );
 }

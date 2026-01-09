@@ -17,7 +17,9 @@ export default function EditProductPage() {
     slug: '',
     description: '',
     price: '',
+    original_price: '',
     unit: 'kg',
+    unit_value: '1',
     category_id: '',
     image_url: '',
     stock_quantity: '0',
@@ -51,7 +53,9 @@ export default function EditProductPage() {
         slug: product.slug || '',
         description: product.description || '',
         price: product.price?.toString() || '',
+        original_price: product.original_price?.toString() || '',
         unit: product.unit || 'kg',
+        unit_value: product.unit_value?.toString() || '1',
         category_id: product.category_id?.toString() || '',
         image_url: product.image_url || '',
         stock_quantity: product.stock_quantity?.toString() || '0',
@@ -87,6 +91,7 @@ export default function EditProductPage() {
       const productData = {
         ...formData,
         price: parseFloat(formData.price),
+        original_price: formData.original_price ? parseFloat(formData.original_price) : null,
         stock_quantity: parseInt(formData.stock_quantity),
         category_id: parseInt(formData.category_id),
       };
@@ -182,26 +187,22 @@ export default function EditProductPage() {
               placeholder="0.00"
             />
           </div>
-
+          
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
-              Unit *
+              Original Price (₹)
             </label>
-            <select
-              name="unit"
-              value={formData.unit}
+            <input
+              type="number"
+              name="original_price"
+              value={formData.original_price}
               onChange={handleChange}
-              required
+              step="0.01"
+              min="0"
               className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
-            >
-              <option value="kg">Kilogram (kg)</option>
-              <option value="g">Gram (g)</option>
-              <option value="piece">Piece</option>
-              <option value="dozen">Dozen</option>
-              <option value="liter">Liter</option>
-              <option value="ml">Milliliter (ml)</option>
-              <option value="pack">Pack</option>
-            </select>
+              placeholder="0.00"
+            />
+            <p className="text-xs text-gray-500 mt-1">For showing discounts (optional)</p>
           </div>
 
           <div>
@@ -218,6 +219,56 @@ export default function EditProductPage() {
               className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
               placeholder="0"
             />
+          </div>
+        </div>
+
+        {/* Unit Section */}
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-3">
+            Product Unit & Quantity
+          </label>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-2">Quantity/Weight *</label>
+              <input
+                type="number"
+                name="unit_value"
+                value={formData.unit_value}
+                onChange={handleChange}
+                required
+                step="0.001"
+                min="0"
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
+                placeholder="e.g., 500, 1, 2"
+              />
+              <p className="text-xs text-gray-500 mt-1">Enter numeric value (e.g., 500 for 500gm, 1 for 1kg)</p>
+            </div>
+
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-2">Unit Type *</label>
+              <select
+                name="unit"
+                value={formData.unit}
+                onChange={handleChange}
+                required
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
+              >
+                <option value="kg">Kilogram (kg)</option>
+                <option value="g">Gram (g)</option>
+                <option value="piece">Piece</option>
+                <option value="dozen">Dozen</option>
+                <option value="liter">Liter (L)</option>
+                <option value="ml">Milliliter (ml)</option>
+                <option value="pack">Pack</option>
+                <option value="bundle">Bundle</option>
+                <option value="box">Box</option>
+              </select>
+              <p className="text-xs text-gray-500 mt-1">
+                Preview: <span className="font-semibold text-green-600">
+                  {formData.unit_value || '1'}{formData.unit}
+                </span>
+              </p>
+            </div>
           </div>
         </div>
 

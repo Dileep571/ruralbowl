@@ -4,6 +4,8 @@ import { AuthProvider } from '@/components/AuthProvider';
 import { ToastProvider } from '@/components/ToastProvider';
 import Header from '@/components/Header';
 import Footer from '@/components/Footer';
+import MobileBottomNav from '@/components/MobileBottomNav';
+import WhatsAppFloatingButton from '@/components/WhatsAppFloatingButton';
 import './globals.css';
 
 const poppins = Poppins({ 
@@ -24,12 +26,14 @@ export default function RootLayout({ children }) {
         <ToastProvider>
           <AuthProvider>
               <CartProvider>
-              <div className="min-h-screen flex flex-col">
+              <div className="min-h-screen flex flex-col pb-16 md:pb-0">
                   <Header />
                   <main className="flex-grow">
                       {children}
                   </main>
                   <Footer />
+                  <MobileBottomNav />
+                  <WhatsAppFloatingButton />
               </div>
               </CartProvider>
           </AuthProvider>

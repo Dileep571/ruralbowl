@@ -1,4 +1,4 @@
-import { productsAPI, dashboardAPI } from '@/lib/api';
+import { productsAPI, dashboardAPI, deliveryAPI } from '@/lib/api';
 
 // CLEAN REWRITE: Minimal, safe helpers only.
 
@@ -37,11 +37,17 @@ export async function getSubscriptionPlans() {
   try {
     const data = await dashboardAPI.getSubscriptionPlans();
     const plans = Array.isArray(data) ? data : (data.plans || []);
-    // Ensure each plan has items array for compatibility
+    // Map database fields to display format
     return plans.map(plan => ({
       ...plan,
-      items: plan.items || [],
-      features: plan.features || []
+      // Use items from database for both features and sample vegetables
+      items: Array.isArray(plan.items) ? plan.items : (plan.items ? [plan.items] : []),
+      features: Array.isArray(plan.items) ? plan.items : (plan.items ? [plan.items] : []),
+      // Map validity_days to duration for display
+      duration: plan.validity_days ? `${plan.validity_days} days` : (plan.duration || '30 days'),
+      // Format delivery info
+      deliveries: plan.total_deliveries,
+      frequency: plan.delivery_frequency
     }));
   } catch (err) {
     console.warn('Falling back to static plans:', err?.message);
@@ -92,4 +98,17 @@ export async function getTestimonials() {
     { id: 2, name: 'Rahul Kumar', rating: 4, text: 'Great quality products at reasonable prices. The subscription plan is very convenient.' },
     { id: 3, name: 'Anita Reddy', rating: 5, text: 'Love the variety and freshness. The customer service is excellent too!' },
   ];
+}
+
+export async function getDeliveryAreas() {
+  try {
+    const areas = await deliveryAPI.getAreas();
+    console.log('Delivery areas received:', areas);
+    const activeAreas = Array.isArray(areas) ? areas.filter(area => area.is_active) : [];
+    console.log('Active delivery areas:', activeAreas);
+    return activeAreas;
+  } catch (err) {
+    console.error('getDeliveryAreas error:', err);
+    return [];
+  }
 }

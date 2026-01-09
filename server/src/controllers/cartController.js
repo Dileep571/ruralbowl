@@ -1,4 +1,5 @@
 const db = require('../config/database');
+const ProductVariant = require('../models/ProductVariant');
 
 // Get User Cart
 const getCart = async (req, res) => {
@@ -6,14 +7,15 @@ const getCart = async (req, res) => {
     const userId = req.user.id;
 
     const result = await db.query(
-      `SELECT c.id, c.quantity, c.created_at, c.updated_at,
+      `SELECT c.id, c.quantity, c.variant_id, c.created_at, c.updated_at,
        json_build_object(
          'id', p.id,
          'name', p.name,
          'price', p.price,
          'unit', p.unit,
          'image_url', p.image_url,
-         'stock_quantity', p.stock_quantity
+         'stock_quantity', p.stock_quantity,
+         'has_variants', p.has_variants
        ) as product
        FROM cart c 
        JOIN products p ON c.product_id = p.id 
@@ -21,8 +23,20 @@ const getCart = async (req, res) => {
       [userId]
     );
 
-    // Return flat array with product nested inside
-    res.json(result.rows);
+    // Add variant details if applicable
+    const cartItems = await Promise.all(
+      result.rows.map(async (item) => {
+        if (item.variant_id) {
+          const variant = await ProductVariant.getById(item.variant_id);
+          item.variant = variant;
+          // Use variant price instead of product price
+          item.product.price = variant.price;
+        }
+        return item;
+      })
+    );
+
+    res.json(cartItems);
   } catch (error) {
     console.error('Get cart error:', error);
     res.status(500).json({ message: 'Server error' });
@@ -33,7 +47,7 @@ const getCart = async (req, res) => {
 const addToCart = async (req, res) => {
   try {
     const userId = req.user.id;
-    const { product_id, quantity } = req.body;
+    const { product_id, quantity, variant_id } = req.body;
 
     // Check if product exists and is available
     const productCheck = await db.query(
@@ -46,11 +60,29 @@ const addToCart = async (req, res) => {
     }
 
     const product = productCheck.rows[0];
+    let stockQuantity = product.stock_quantity;
+    let itemPrice = product.price;
 
-    // Check if item already in cart
+    // If product has variants, variant_id is required
+    if (product.has_variants && !variant_id) {
+      return res.status(400).json({ message: 'Please select a variant' });
+    }
+
+    // If variant is selected, check variant availability and use variant stock
+    if (variant_id) {
+      const variant = await ProductVariant.getById(variant_id);
+      if (!variant || !variant.is_available) {
+        return res.status(404).json({ message: 'Variant not found or not available' });
+      }
+      stockQuantity = variant.stock_quantity;
+      itemPrice = variant.price;
+    }
+
+    // Check if item already in cart (with same variant if applicable)
     const existingItem = await db.query(
-      'SELECT * FROM cart WHERE user_id = $1 AND product_id = $2',
-      [userId, product_id]
+      `SELECT * FROM cart 
+       WHERE user_id = $1 AND product_id = $2 AND ($3::INTEGER IS NULL OR variant_id = $3)`,
+      [userId, product_id, variant_id || null]
     );
 
     // Calculate total quantity after adding
@@ -58,10 +90,10 @@ const addToCart = async (req, res) => {
     const totalRequestedQty = currentCartQty + quantity;
 
     // Check stock availability
-    if (totalRequestedQty > product.stock_quantity) {
+    if (totalRequestedQty > stockQuantity) {
       return res.status(400).json({ 
-        message: `Only ${product.stock_quantity} units available in stock. You already have ${currentCartQty} in cart.`,
-        availableStock: product.stock_quantity,
+        message: `Only ${stockQuantity} units available in stock. You already have ${currentCartQty} in cart.`,
+        availableStock: stockQuantity,
         currentCartQuantity: currentCartQty
       });
     }
@@ -70,14 +102,14 @@ const addToCart = async (req, res) => {
     if (existingItem.rows.length > 0) {
       // Update quantity
       result = await db.query(
-        'UPDATE cart SET quantity = quantity + $1, updated_at = CURRENT_TIMESTAMP WHERE user_id = $2 AND product_id = $3 RETURNING *',
-        [quantity, userId, product_id]
+        'UPDATE cart SET quantity = quantity + $1, updated_at = CURRENT_TIMESTAMP WHERE user_id = $2 AND product_id = $3 AND ($4::INTEGER IS NULL OR variant_id = $4) RETURNING *',
+        [quantity, userId, product_id, variant_id || null]
       );
     } else {
       // Insert new item
       result = await db.query(
-        'INSERT INTO cart (user_id, product_id, quantity) VALUES ($1, $2, $3) RETURNING *',
-        [userId, product_id, quantity]
+        'INSERT INTO cart (user_id, product_id, quantity, variant_id) VALUES ($1, $2, $3, $4) RETURNING *',
+        [userId, product_id, quantity, variant_id || null]
       );
     }
 

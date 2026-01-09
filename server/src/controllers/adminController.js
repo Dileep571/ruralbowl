@@ -5,8 +5,8 @@ const emailService = require('../services/emailService');
 
 // Default admin credentials
 const DEFAULT_ADMIN = {
-  username: 'admin',
-  password: 'admin123', // Will be hashed
+  username: 'ruralbowl',
+  password: 'Ruralbowl@2025', // Will be hashed
   email: 'admin@ruralbowl.com',
   role: 'admin'
 };
@@ -72,9 +72,16 @@ const adminLogin = async (req, res) => {
       { expiresIn: '24h' }
     );
 
+    // Set HttpOnly cookie for admin token
+    res.cookie('accessToken', token, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax',
+      maxAge: 24 * 60 * 60 * 1000 // 24 hours
+    });
+
     res.json({
       message: 'Login successful',
-      token,
       user: {
         id: admin.id,
         name: admin.name,
@@ -84,6 +91,23 @@ const adminLogin = async (req, res) => {
     });
   } catch (error) {
     console.error('Admin login error:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+};
+
+// Admin Logout
+const adminLogout = async (req, res) => {
+  try {
+    // Clear the accessToken cookie
+    res.clearCookie('accessToken', {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax'
+    });
+
+    res.json({ message: 'Logout successful' });
+  } catch (error) {
+    console.error('Admin logout error:', error);
     res.status(500).json({ message: 'Server error' });
   }
 };
@@ -492,6 +516,36 @@ const updateOrderStatus = async (req, res) => {
   }
 };
 
+// Update Order Payment Status (Admin)
+const updateOrderPaymentStatus = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { payment_status } = req.body;
+
+    const validPaymentStatuses = ['pending', 'paid', 'failed', 'refunded'];
+    if (!validPaymentStatuses.includes(payment_status)) {
+      return res.status(400).json({ message: 'Invalid payment status' });
+    }
+
+    const result = await db.query(
+      'UPDATE orders SET payment_status = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2 RETURNING *',
+      [payment_status, id]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ message: 'Order not found' });
+    }
+
+    res.json({
+      message: 'Payment status updated successfully',
+      order: result.rows[0]
+    });
+  } catch (error) {
+    console.error('Update payment status error:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+};
+
 // Get All Products (Admin)
 const getAllProducts = async (req, res) => {
   try {
@@ -578,24 +632,54 @@ const getAllProducts = async (req, res) => {
 // Create Product
 const createProduct = async (req, res) => {
   try {
-    const { name, slug, description, price, unit, category_id, image_url, stock_quantity, is_available } = req.body;
+    const { name, slug, description, price, unit, unit_value, category_id, image_url, stock_quantity, is_available, has_variants, variants } = req.body;
 
-    if (!name || !price || !unit || !category_id) {
-      return res.status(400).json({ message: 'Name, price, unit, and category are required' });
+    if (!name || !category_id) {
+      return res.status(400).json({ message: 'Name and category are required' });
+    }
+
+    // If product has variants, price is optional (will be set per variant)
+    if (!has_variants && !price) {
+      return res.status(400).json({ message: 'Price is required for products without variants' });
     }
 
     const productSlug = slug || name.toLowerCase().replace(/[^a-z0-9]+/g, '-');
 
     const result = await db.query(
-      `INSERT INTO products (name, slug, description, price, unit, category_id, image_url, stock_quantity, is_available) 
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) 
+      `INSERT INTO products (name, slug, description, price, unit, unit_value, category_id, image_url, stock_quantity, is_available, has_variants) 
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) 
        RETURNING *`,
-      [name, productSlug, description, price, unit, category_id, image_url, stock_quantity || 0, is_available !== false]
+      [name, productSlug, description, price || 0, unit || 'piece', unit_value || 1, category_id, image_url, stock_quantity || 0, is_available !== false, has_variants || false]
     );
+
+    const product = result.rows[0];
+
+    // Create variants if provided
+    if (has_variants && variants && Array.isArray(variants) && variants.length > 0) {
+      const ProductVariant = require('../models/ProductVariant');
+      
+      for (let i = 0; i < variants.length; i++) {
+        await ProductVariant.create({
+          product_id: product.id,
+          variant_name: variants[i].variant_name,
+          variant_value: variants[i].variant_value,
+          price: variants[i].price,
+          original_price: variants[i].original_price,
+          sku: variants[i].sku,
+          stock_quantity: variants[i].stock_quantity || 0,
+          is_available: variants[i].is_available !== false,
+          display_order: i
+        });
+      }
+
+      // Fetch product with variants
+      const variantsResult = await ProductVariant.getByProductId(product.id);
+      product.variants = variantsResult;
+    }
 
     res.status(201).json({
       message: 'Product created successfully',
-      product: result.rows[0]
+      product
     });
   } catch (error) {
     console.error('Create product error:', error);
@@ -623,7 +707,16 @@ const getProductById = async (req, res) => {
       return res.status(404).json({ message: 'Product not found' });
     }
 
-    res.json({ product: result.rows[0] });
+    const product = result.rows[0];
+
+    // Fetch variants if product has variants
+    if (product.has_variants) {
+      const ProductVariant = require('../models/ProductVariant');
+      const variants = await ProductVariant.getByProductId(product.id);
+      product.variants = variants;
+    }
+
+    res.json({ product });
   } catch (error) {
     console.error('Get product by ID error:', error);
     res.status(500).json({ message: 'Server error' });
@@ -634,7 +727,7 @@ const getProductById = async (req, res) => {
 const updateProduct = async (req, res) => {
   try {
     const { id } = req.params;
-    const { name, slug, description, price, unit, category_id, image_url, stock_quantity, is_available } = req.body;
+    const { name, slug, description, price, unit, unit_value, category_id, image_url, stock_quantity, is_available } = req.body;
 
     const updates = [];
     const params = [];
@@ -663,6 +756,11 @@ const updateProduct = async (req, res) => {
     if (unit !== undefined) {
       updates.push(`unit = $${paramCount}`);
       params.push(unit);
+      paramCount++;
+    }
+    if (unit_value !== undefined) {
+      updates.push(`unit_value = $${paramCount}`);
+      params.push(unit_value);
       paramCount++;
     }
     if (category_id !== undefined) {
@@ -824,7 +922,7 @@ const getCategoryById = async (req, res) => {
 // Create Category
 const createCategory = async (req, res) => {
   try {
-    const { name, slug, description } = req.body;
+    const { name, slug, description, image_url } = req.body;
 
     if (!name) {
       return res.status(400).json({ message: 'Category name is required' });
@@ -833,8 +931,8 @@ const createCategory = async (req, res) => {
     const categorySlug = slug || name.toLowerCase().replace(/[^a-z0-9]+/g, '-');
 
     const result = await db.query(
-      'INSERT INTO categories (name, slug, description) VALUES ($1, $2, $3) RETURNING *',
-      [name, categorySlug, description]
+      'INSERT INTO categories (name, slug, description, image_url) VALUES ($1, $2, $3, $4) RETURNING *',
+      [name, categorySlug, description, image_url || null]
     );
 
     res.status(201).json({
@@ -854,7 +952,9 @@ const createCategory = async (req, res) => {
 const updateCategory = async (req, res) => {
   try {
     const { id } = req.params;
-    const { name, slug, description } = req.body;
+    const { name, slug, description, image_url } = req.body;
+
+    console.log('Update category request:', { id, body: req.body }); // Debug
 
     const updates = [];
     const params = [];
@@ -875,12 +975,18 @@ const updateCategory = async (req, res) => {
       params.push(description);
       paramCount++;
     }
+    if (image_url !== undefined) {
+      updates.push(`image_url = $${paramCount}`);
+      params.push(image_url);
+      paramCount++;
+    }
 
     if (updates.length === 0) {
       return res.status(400).json({ message: 'No fields to update' });
     }
 
-    updates.push(`updated_at = CURRENT_TIMESTAMP`);
+    // Add updated_at only if the column exists in the table
+    // updates.push(`updated_at = CURRENT_TIMESTAMP`);
     params.push(id);
 
     const result = await db.query(
@@ -891,6 +997,8 @@ const updateCategory = async (req, res) => {
     if (result.rows.length === 0) {
       return res.status(404).json({ message: 'Category not found' });
     }
+
+    console.log('Category updated in DB:', result.rows[0]); // Debug
 
     res.json({
       message: 'Category updated successfully',
@@ -940,6 +1048,7 @@ const deleteCategory = async (req, res) => {
 
 module.exports = {
   adminLogin,
+  adminLogout,
   getDashboardStats,
   getAllUsers,
   getUserDetails,
@@ -947,6 +1056,7 @@ module.exports = {
   getAllOrders,
   getOrderById,
   updateOrderStatus,
+  updateOrderPaymentStatus,
   getAllProducts,
   getProductById,
   createProduct,

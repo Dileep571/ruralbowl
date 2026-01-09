@@ -28,7 +28,9 @@ const initDatabase = async () => {
         slug VARCHAR(100) UNIQUE NOT NULL,
         description TEXT,
         image_url VARCHAR(500),
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        is_active BOOLEAN DEFAULT true,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       )
     `);
     console.log('✓ Categories table created');

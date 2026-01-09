@@ -1,34 +1,26 @@
 // Frontend Authentication & API Helper
-// Drop this in your Next.js project: web/src/lib/authApi.js
+// UPDATED: Now uses HttpOnly cookies for authentication
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api';
 
 class AuthAPI {
   constructor() {
-    this.token = null;
-    if (typeof window !== 'undefined') {
-      this.token = localStorage.getItem('token');
-    }
+    // No token storage needed - auth via HttpOnly cookies
   }
 
-  // Get authorization headers
-  getHeaders(includeAuth = true) {
-    const headers = {
+  // Get authorization headers (no token needed)
+  getHeaders() {
+    return {
       'Content-Type': 'application/json',
     };
-    
-    if (includeAuth && this.token) {
-      headers['Authorization'] = `Bearer ${this.token}`;
-    }
-    
-    return headers;
   }
 
-  // Generic API request
+  // Generic API request with cookie-based auth
   async request(endpoint, options = {}) {
     const config = {
       ...options,
-      headers: this.getHeaders(options.requireAuth !== false),
+      headers: this.getHeaders(),
+      credentials: 'include', // CRITICAL: Send HttpOnly cookies
     };
 
     try {
@@ -36,8 +28,19 @@ class AuthAPI {
       const data = await response.json();
 
       if (!response.ok) {
-        // Handle 401 Unauthorized
-        if (response.status === 401) {
+        // Handle 401 Unauthorized - try refresh
+        if (response.status === 401 && data.message?.toLowerCase().includes('token expired')) {
+          const refreshed = await this.tryRefresh();
+          if (refreshed) {
+            // Retry original request
+            const retryRes = await fetch(`${API_BASE_URL}${endpoint}`, config);
+            const retryData = await retryRes.json();
+            if (!retryRes.ok) {
+              throw new Error(retryData.message || `HTTP ${retryRes.status}`);
+            }
+            return retryData;
+          }
+          // Refresh failed
           this.logout();
           throw new Error('Session expired. Please login again.');
         }
@@ -51,6 +54,21 @@ class AuthAPI {
     }
   }
 
+  // Try to refresh access token
+  async tryRefresh() {
+    try {
+      const response = await fetch(`${API_BASE_URL}/auth/refresh`, {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+      });
+      return response.ok;
+    } catch (err) {
+      console.error('Refresh error:', err);
+      return false;
+    }
+  }
+
   // ============= AUTH =============
   async login(email, password) {
     const data = await this.request('/auth/login', {
@@ -59,9 +77,8 @@ class AuthAPI {
       body: JSON.stringify({ email, password }),
     });
 
-    this.token = data.token;
-    if (typeof window !== 'undefined') {
-      localStorage.setItem('token', data.token);
+    // Store user data (tokens are in HttpOnly cookies)
+    if (typeof window !== 'undefined' && data.user) {
       localStorage.setItem('user', JSON.stringify(data.user));
     }
 
@@ -75,9 +92,8 @@ class AuthAPI {
       body: JSON.stringify({ name, email, password, phone }),
     });
 
-    this.token = data.token;
-    if (typeof window !== 'undefined') {
-      localStorage.setItem('token', data.token);
+    // Store user data (tokens are in HttpOnly cookies)
+    if (typeof window !== 'undefined' && data.user) {
       localStorage.setItem('user', JSON.stringify(data.user));
     }
 
@@ -85,11 +101,16 @@ class AuthAPI {
   }
 
   logout() {
-    this.token = null;
+    // Call server to clear cookies
+    fetch(`${API_BASE_URL}/auth/logout`, {
+      method: 'POST',
+      credentials: 'include',
+    }).catch(() => {});
+    
+    // Clear local data
     if (typeof window !== 'undefined') {
-      localStorage.removeItem('token');
       localStorage.removeItem('user');
-      window.location.href = '/login';
+      window.location.href = '/auth/login';
     }
   }
 
@@ -102,7 +123,8 @@ class AuthAPI {
   }
 
   isAuthenticated() {
-    return !!this.token;
+    // Check if user exists (tokens are in HttpOnly cookies)
+    return !!this.getUser();
   }
 
   // ============= PRODUCTS =============

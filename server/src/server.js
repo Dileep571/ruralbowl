@@ -31,6 +31,8 @@ const couponRoutes = require('./routes/couponRoutes');
 const wishlistRoutes = require('./routes/wishlistRoutes');
 const subscriptionRoutes = require('./routes/subscriptionRoutes');
 const walletRoutes = require('./routes/walletRoutes');
+const deliveryRoutes = require('./routes/deliveryRoutes');
+const otpRoutes = require('./routes/otpRoutes');
 
 // Initialize app
 const app = express();
@@ -94,6 +96,8 @@ app.use('/api', couponRoutes);
 app.use('/api', wishlistRoutes);
 app.use('/api/subscriptions', subscriptionRoutes);
 app.use('/api/wallet', walletRoutes);
+app.use('/api/delivery', deliveryRoutes);
+app.use('/api/otp', authLimiter, otpRoutes);
 
 // Health check route
 app.get('/api/health', (req, res) => {

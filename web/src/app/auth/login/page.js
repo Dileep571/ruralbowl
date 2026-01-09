@@ -59,11 +59,12 @@ export default function LoginPage() {
     try {
       const result = await loginAPI(formData.email, formData.password);
       if (result.success) {
-        login(result.data.user, result.data.token);
-        // Merge guest cart after login
-        await mergeGuestCartToServer();
+        // Login will automatically trigger cart merge via event listener
+        // Tokens are now in HttpOnly cookies, only pass user data
+        login(result.data.user);
         toast.success('Login successful! Redirecting...');
-        setTimeout(() => router.push('/dashboard'), 500);
+        // Small delay to allow cart merge to complete
+        setTimeout(() => router.push('/dashboard'), 800);
       } else {
         const errorMsg = result.error || 'Invalid email or password';
         setError(errorMsg);
@@ -134,6 +135,9 @@ export default function LoginPage() {
                 <label htmlFor="password" className="block text-sm font-medium text-gray-700">
                   Password
                 </label>
+                <Link href="/auth/forgot-password" className="text-sm font-medium text-green-600 hover:text-green-500 transition-colors">
+                  Forgot password?
+                </Link>
               </div>
               <div className="mt-1">
                 <input
