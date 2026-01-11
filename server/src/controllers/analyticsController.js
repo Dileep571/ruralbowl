@@ -9,8 +9,8 @@ const getDashboardAnalytics = async (req, res) => {
     // Total revenue
     const revenueResult = await db.query(
       `SELECT 
-        COALESCE(SUM(total_amount), 0) as total_revenue,
-        COALESCE(SUM(discount_amount), 0) as total_discounts,
+        COALESCE(SUM(total), 0) as total_revenue,
+        COALESCE(SUM(discount), 0) as total_discounts,
         COUNT(*) as total_orders
        FROM orders 
        WHERE status != 'cancelled' 
@@ -30,7 +30,7 @@ const getDashboardAnalytics = async (req, res) => {
       `SELECT 
         DATE(created_at) as date,
         COUNT(*) as order_count,
-        SUM(total_amount) as revenue
+        SUM(total) as revenue
        FROM orders
        WHERE status != 'cancelled'
        AND created_at >= NOW() - INTERVAL '${daysAgo} days'
@@ -45,7 +45,7 @@ const getDashboardAnalytics = async (req, res) => {
         p.name,
         p.price,
         SUM(oi.quantity) as total_sold,
-        SUM(oi.price * oi.quantity) as revenue
+        SUM(oi.unit_price * oi.quantity) as revenue
        FROM order_items oi
        JOIN products p ON oi.product_id = p.id
        JOIN orders o ON oi.order_id = o.id
@@ -66,7 +66,7 @@ const getDashboardAnalytics = async (req, res) => {
 
     // Average order value
     const avgOrderResult = await db.query(
-      `SELECT AVG(total_amount) as avg_order_value
+      `SELECT AVG(total) as avg_order_value
        FROM orders
        WHERE status != 'cancelled'
        AND created_at >= NOW() - INTERVAL '${daysAgo} days'`
@@ -111,8 +111,8 @@ const getSalesChart = async (req, res) => {
       `SELECT 
         TO_CHAR(${groupByClause}, '${dateFormat}') as period,
         COUNT(*) as orders,
-        SUM(total_amount) as revenue,
-        SUM(discount_amount) as discounts
+        SUM(total) as revenue,
+        SUM(discount) as discounts
        FROM orders
        WHERE status != 'cancelled'
        AND created_at >= NOW() - INTERVAL '${daysAgo} days'
@@ -139,7 +139,7 @@ const getCategoryPerformance = async (req, res) => {
         c.name,
         COUNT(DISTINCT oi.order_id) as orders,
         SUM(oi.quantity) as items_sold,
-        SUM(oi.price * oi.quantity) as revenue
+        SUM(oi.unit_price * oi.quantity) as revenue
        FROM categories c
        JOIN products p ON c.id = p.category_id
        JOIN order_items oi ON p.id = oi.product_id
@@ -182,7 +182,7 @@ const getCustomerAnalytics = async (req, res) => {
         u.name,
         u.email,
         COUNT(o.id) as order_count,
-        SUM(o.total_amount) as total_spent
+        SUM(o.total) as total_spent
        FROM users u
        JOIN orders o ON u.id = o.user_id
        WHERE o.status != 'cancelled'
@@ -247,7 +247,7 @@ const getProductPerformance = async (req, res) => {
         c.name as category_name,
         COUNT(DISTINCT oi.order_id) as order_count,
         SUM(oi.quantity) as total_sold,
-        SUM(oi.price * oi.quantity) as revenue
+        SUM(oi.unit_price * oi.quantity) as revenue
        FROM products p
        LEFT JOIN categories c ON p.category_id = c.id
        LEFT JOIN order_items oi ON p.id = oi.product_id

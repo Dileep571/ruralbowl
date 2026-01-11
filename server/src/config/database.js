@@ -2,6 +2,7 @@ const { Pool } = require('pg');
 require('dotenv').config();
 
 const isProduction = process.env.NODE_ENV === 'production';
+const isNeonDatabase = process.env.DB_HOST && process.env.DB_HOST.includes('neon.tech');
 
 const poolConfig = {
   host: process.env.DB_HOST,
@@ -13,8 +14,8 @@ const poolConfig = {
   max: parseInt(process.env.DB_POOL_MAX) || 20,
   idleTimeoutMillis: 30000,
   connectionTimeoutMillis: 2000,
-  // SSL for production (required by most cloud providers)
-  ssl: isProduction ? { rejectUnauthorized: false } : false,
+  // SSL is required for Neon and other cloud databases
+  ssl: (isProduction || isNeonDatabase) ? { rejectUnauthorized: false } : false,
 };
 
 const pool = new Pool(poolConfig);

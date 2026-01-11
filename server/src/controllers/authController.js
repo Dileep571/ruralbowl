@@ -28,7 +28,7 @@ const hashToken = (token) => {
 const saveRefreshToken = async (userId, token, expiresAt) => {
   const hashedToken = hashToken(token);
   await db.query(
-    'INSERT INTO refresh_tokens(token, user_id, expires_at) VALUES ($1, $2, $3) ON CONFLICT (token) DO UPDATE SET revoked = false, expires_at = $3',
+    'INSERT INTO refresh_tokens(token, user_id, expires_at) VALUES ($1, $2, $3)',
     [hashedToken, userId, expiresAt]
   );
 };
@@ -36,7 +36,7 @@ const saveRefreshToken = async (userId, token, expiresAt) => {
 // Revoke refresh token (by hashed value)
 const revokeRefreshToken = async (token) => {
   const hashedToken = hashToken(token);
-  await db.query('UPDATE refresh_tokens SET revoked = true WHERE token = $1', [hashedToken]);
+  await db.query('DELETE FROM refresh_tokens WHERE token = $1', [hashedToken]);
 };
 
 // Find refresh token record (by hashed value)
@@ -142,10 +142,11 @@ const register = async (req, res) => {
       path: '/auth/refresh'
     });
 
-    // Send response immediately (NO TOKEN IN BODY)
+    // Send response immediately with token
     res.status(201).json({
       success: true,
       message: 'User registered successfully',
+      token: token,
       user: {
         id: user.id,
         name: user.name,
@@ -228,6 +229,7 @@ const login = async (req, res) => {
     res.json({
       success: true,
       message: 'Login successful',
+      token: token,
       user: {
         id: user.id,
         name: user.name,
@@ -252,7 +254,7 @@ const refreshAccessToken = async (req, res) => {
     }
 
     const record = await findRefreshToken(refreshToken);
-    if (!record || record.revoked) {
+    if (!record) {
       return res.status(401).json({ message: 'Refresh token invalid' });
     }
 

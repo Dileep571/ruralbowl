@@ -9,30 +9,9 @@ const createOrder = async (req, res) => {
 
   try {
     const userId = req.user.id;
-    const { shipping_address, payment_method, notes, coupon_code, delivery_area_id } = req.body;
-
-    // Validate delivery area
-    if (!delivery_area_id) {
-      return res.status(400).json({ 
-        message: 'Please select a delivery area',
-        field: 'delivery_area_id'
-      });
-    }
+    const { shipping_address, payment_method, notes, coupon_code } = req.body;
 
     await client.query('BEGIN');
-
-    // Check if delivery area is active
-    const areaCheck = await client.query(
-      'SELECT * FROM delivery_areas WHERE id = $1 AND is_active = TRUE',
-      [delivery_area_id]
-    );
-
-    if (areaCheck.rows.length === 0) {
-      await client.query('ROLLBACK');
-      return res.status(400).json({ 
-        message: 'Delivery not available in selected area' 
-      });
-    }
 
     // Calculate expected delivery date based on current time
     const expectedDeliveryDate = calculateDeliveryDate();
@@ -94,19 +73,17 @@ const createOrder = async (req, res) => {
       }
     }
 
-    // Create order with delivery information
+    // Create order
     const orderResult = await client.query(
       `INSERT INTO orders (
-        user_id, subtotal, discount_amount, total_amount, coupon_id, 
-        shipping_address, payment_method, notes, 
-        delivery_area_id, expected_delivery_date
+        user_id, subtotal, discount, total, coupon_id, 
+        shipping_address, payment_method, notes
       ) 
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) 
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8) 
        RETURNING *`,
       [
         userId, subtotal, discountAmount, totalAmount, couponId, 
-        shipping_address, payment_method, notes, 
-        delivery_area_id, expectedDeliveryDate
+        shipping_address, payment_method, notes
       ]
     );
 
@@ -119,9 +96,11 @@ const createOrder = async (req, res) => {
 
     // Create order items and deduct stock
     for (const item of cartItems.rows) {
+      const totalPrice = parseFloat(item.price) * item.quantity;
       await client.query(
-        'INSERT INTO order_items (order_id, product_id, quantity, price) VALUES ($1, $2, $3, $4)',
-        [order.id, item.product_id, item.quantity, item.price]
+        `INSERT INTO order_items (order_id, product_id, product_name, quantity, unit_price, total_price) 
+         VALUES ($1, $2, $3, $4, $5, $6)`,
+        [order.id, item.product_id, item.name, item.quantity, item.price, totalPrice]
       );
 
       // Deduct stock quantity
@@ -197,14 +176,11 @@ const getOrders = async (req, res) => {
 
     const result = await db.query(
       `SELECT o.*, 
-       da.area_name as delivery_area_name,
-       da.city as delivery_city,
        COUNT(oi.id) as items_count 
        FROM orders o 
-       LEFT JOIN order_items oi ON o.id = oi.order_id 
-       LEFT JOIN delivery_areas da ON o.delivery_area_id = da.id
+       LEFT JOIN order_items oi ON o.id = oi.order_id
        WHERE o.user_id = $1 
-       GROUP BY o.id, da.area_name, da.city
+       GROUP BY o.id
        ORDER BY o.created_at DESC`,
       [userId]
     );
@@ -284,13 +260,10 @@ const getAllOrders = async (req, res) => {
 
     let query = `
       SELECT o.*, u.name as user_name, u.email as user_email,
-      da.area_name as delivery_area_name,
-      da.city as delivery_city,
       COUNT(oi.id) as items_count 
       FROM orders o 
       JOIN users u ON o.user_id = u.id 
       LEFT JOIN order_items oi ON o.id = oi.order_id
-      LEFT JOIN delivery_areas da ON o.delivery_area_id = da.id
     `;
     const params = [];
     let paramIndex = 1;
@@ -301,7 +274,7 @@ const getAllOrders = async (req, res) => {
       paramIndex++;
     }
 
-    query += ` GROUP BY o.id, u.name, u.email, da.area_name, da.city ORDER BY o.created_at DESC LIMIT $${paramIndex} OFFSET $${paramIndex + 1}`;
+    query += ` GROUP BY o.id, u.name, u.email ORDER BY o.created_at DESC LIMIT $${paramIndex} OFFSET $${paramIndex + 1}`;
     params.push(limit, offset);
 
     const result = await db.query(query, params);

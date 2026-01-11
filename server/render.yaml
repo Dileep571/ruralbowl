@@ -1,0 +1,47 @@
+services:
+  # Backend API Service
+  - type: web
+    name: ruralbowl-api
+    env: node
+    region: singapore
+    buildCommand: npm install
+    startCommand: node src/server.js
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 10000
+      - key: DB_HOST
+        fromDatabase:
+          name: ruralbowl-db
+          property: host
+      - key: DB_PORT
+        fromDatabase:
+          name: ruralbowl-db
+          property: port
+      - key: DB_NAME
+        fromDatabase:
+          name: ruralbowl-db
+          property: database
+      - key: DB_USER
+        fromDatabase:
+          name: ruralbowl-db
+          property: user
+      - key: DB_PASSWORD
+        fromDatabase:
+          name: ruralbowl-db
+          property: password
+      - key: JWT_SECRET
+        generateValue: true
+      - key: JWT_EXPIRE
+        value: 7d
+      - key: REFRESH_TOKEN_EXPIRE_DAYS
+        value: 30
+      # Add your other environment variables in Render dashboard:
+      # - FRONTEND_URL (your Vercel URL)
+      # - EMAIL_USER
+      # - EMAIL_PASSWORD
+      # - ADMIN_EMAIL
+      # - CLOUDINARY_CLOUD_NAME
+      # - CLOUDINARY_API_KEY
+      # - CLOUDINARY_API_SECRET

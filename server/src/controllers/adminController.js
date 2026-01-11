@@ -82,6 +82,7 @@ const adminLogin = async (req, res) => {
 
     res.json({
       message: 'Login successful',
+      token: token,
       user: {
         id: admin.id,
         name: admin.name,
@@ -122,13 +123,13 @@ const getDashboardStats = async (req, res) => {
     const ordersResult = await db.query('SELECT COUNT(*) as count FROM orders');
     
     // Total revenue
-    const revenueResult = await db.query('SELECT SUM(total_amount) as total FROM orders WHERE status != $1', ['cancelled']);
+    const revenueResult = await db.query('SELECT SUM(total) as total FROM orders WHERE status != $1', ['cancelled']);
     
     // Pending orders
     const pendingOrdersResult = await db.query('SELECT COUNT(*) as count FROM orders WHERE status = $1', ['pending']);
     
     // Low stock products
-    const lowStockResult = await db.query('SELECT COUNT(*) as count FROM products WHERE stock_quantity < 10 AND is_available = true');
+    const lowStockResult = await db.query('SELECT COUNT(*) as count FROM products WHERE stock_quantity < 10 AND is_active = true');
     
     // Recent orders
     const recentOrdersResult = await db.query(`
@@ -141,7 +142,7 @@ const getDashboardStats = async (req, res) => {
 
     // Top selling products
     const topProductsResult = await db.query(`
-      SELECT p.id, p.name, p.price, p.image_url, SUM(oi.quantity) as total_sold, SUM(oi.price * oi.quantity) as revenue
+      SELECT p.id, p.name, p.price, p.image_url, SUM(oi.quantity) as total_sold, SUM(oi.unit_price * oi.quantity) as revenue
       FROM products p
       JOIN order_items oi ON p.id = oi.product_id
       JOIN orders o ON oi.order_id = o.id
@@ -153,7 +154,7 @@ const getDashboardStats = async (req, res) => {
 
     // Sales by day (last 7 days)
     const salesByDayResult = await db.query(`
-      SELECT DATE(created_at) as date, COUNT(*) as orders, SUM(total_amount) as revenue
+      SELECT DATE(created_at) as date, COUNT(*) as orders, SUM(total) as revenue
       FROM orders
       WHERE created_at >= CURRENT_DATE - INTERVAL '7 days' AND status != 'cancelled'
       GROUP BY DATE(created_at)
@@ -574,9 +575,9 @@ const getAllProducts = async (req, res) => {
     }
 
     if (availability === 'available') {
-      query += ` AND p.is_available = true AND p.stock_quantity > 0`;
+      query += ` AND p.is_active = true AND p.stock_quantity > 0`;
     } else if (availability === 'out_of_stock') {
-      query += ` AND (p.is_available = false OR p.stock_quantity = 0)`;
+      query += ` AND (p.is_active = false OR p.stock_quantity = 0)`;
     } else if (availability === 'low_stock') {
       query += ` AND p.stock_quantity < 10 AND p.stock_quantity > 0`;
     }
@@ -604,9 +605,9 @@ const getAllProducts = async (req, res) => {
     }
 
     if (availability === 'available') {
-      countQuery += ` AND p.is_available = true AND p.stock_quantity > 0`;
+      countQuery += ` AND p.is_active = true AND p.stock_quantity > 0`;
     } else if (availability === 'out_of_stock') {
-      countQuery += ` AND (p.is_available = false OR p.stock_quantity = 0)`;
+      countQuery += ` AND (p.is_active = false OR p.stock_quantity = 0)`;
     } else if (availability === 'low_stock') {
       countQuery += ` AND p.stock_quantity < 10 AND p.stock_quantity > 0`;
     }
@@ -632,7 +633,7 @@ const getAllProducts = async (req, res) => {
 // Create Product
 const createProduct = async (req, res) => {
   try {
-    const { name, slug, description, price, unit, unit_value, category_id, image_url, stock_quantity, is_available, has_variants, variants } = req.body;
+    const { name, slug, description, price, unit, unit_value, category_id, image_url, stock_quantity, is_active, has_variants, variants } = req.body;
 
     if (!name || !category_id) {
       return res.status(400).json({ message: 'Name and category are required' });
@@ -667,7 +668,7 @@ const createProduct = async (req, res) => {
           original_price: variants[i].original_price,
           sku: variants[i].sku,
           stock_quantity: variants[i].stock_quantity || 0,
-          is_available: variants[i].is_available !== false,
+          is_active: variants[i].is_active !== false,
           display_order: i
         });
       }
@@ -727,7 +728,7 @@ const getProductById = async (req, res) => {
 const updateProduct = async (req, res) => {
   try {
     const { id } = req.params;
-    const { name, slug, description, price, unit, unit_value, category_id, image_url, stock_quantity, is_available } = req.body;
+    const { name, slug, description, price, unit, unit_value, category_id, image_url, stock_quantity, is_active } = req.body;
 
     const updates = [];
     const params = [];
@@ -778,9 +779,9 @@ const updateProduct = async (req, res) => {
       params.push(stock_quantity);
       paramCount++;
     }
-    if (is_available !== undefined) {
-      updates.push(`is_available = $${paramCount}`);
-      params.push(is_available);
+    if (is_active !== undefined) {
+      updates.push(`is_active = $${paramCount}`);
+      params.push(is_active);
       paramCount++;
     }
 

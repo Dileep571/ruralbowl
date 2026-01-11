@@ -120,7 +120,7 @@ const { startScheduler } = require('./services/subscriptionScheduler');
 
 // Start server
 const PORT = process.env.PORT || 5000;
-app.listen(PORT, () => {
+const server = app.listen(PORT, () => {
   console.log(`🚀 Server running on port ${PORT} in ${isProduction ? 'PRODUCTION' : 'development'} mode`);
   if (!isProduction) {
     console.log(`📡 API endpoint: http://localhost:${PORT}/api`);
@@ -129,6 +129,15 @@ app.listen(PORT, () => {
   
   // Start cron jobs
   startScheduler();
+});
+
+// Handle uncaught exceptions
+process.on('uncaughtException', (error) => {
+  console.error('❌ Uncaught Exception:', error);
+});
+
+process.on('unhandledRejection', (reason, promise) => {
+  console.error('❌ Unhandled Rejection at:', promise, 'reason:', reason);
 });
 
 module.exports = app;

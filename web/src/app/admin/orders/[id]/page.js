@@ -25,7 +25,7 @@ export default function AdminOrderDetailPage() {
     try {
       setLoading(true);
       setError('');
-      const response = await fetch(`http://localhost:5000/api/admin/orders/${orderId}`, {
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api'}/admin/orders/${orderId}`, {
         credentials: 'include',
       });
       

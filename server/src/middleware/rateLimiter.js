@@ -9,10 +9,6 @@ const authLimiter = rateLimit({
   },
   standardHeaders: true, // Return rate limit info in `RateLimit-*` headers
   legacyHeaders: false, // Disable `X-RateLimit-*` headers
-  // Use IP address as key
-  keyGenerator: (req) => {
-    return req.ip || req.connection.remoteAddress;
-  },
   // Skip successful requests
   skipSuccessfulRequests: false,
   // Skip failed requests
@@ -28,9 +24,6 @@ const otpLimiter = rateLimit({
   },
   standardHeaders: true,
   legacyHeaders: false,
-  keyGenerator: (req) => {
-    return req.ip || req.connection.remoteAddress;
-  },
 });
 
 // General API rate limiter

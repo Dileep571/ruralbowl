@@ -10,7 +10,7 @@ const getProducts = async (req, res) => {
       SELECT p.*, c.name as category_name, c.slug as category_slug 
       FROM products p 
       LEFT JOIN categories c ON p.category_id = c.id 
-      WHERE p.is_available = true
+      WHERE p.is_active = true
     `;
     const params = [];
     let paramIndex = 1;
@@ -112,16 +112,16 @@ const createProduct = async (req, res) => {
 const updateProduct = async (req, res) => {
   try {
     const { id } = req.params;
-    const { name, slug, description, price, unit, unit_value, category_id, image_url, stock_quantity, is_available } = req.body;
+    const { name, slug, description, price, unit, unit_value, category_id, image_url, stock_quantity, is_active } = req.body;
 
     const result = await db.query(
       `UPDATE products 
        SET name = $1, slug = $2, description = $3, price = $4, unit = $5, 
-           unit_value = $6, category_id = $7, image_url = $8, stock_quantity = $9, is_available = $10, 
+           unit_value = $6, category_id = $7, image_url = $8, stock_quantity = $9, is_active = $10, 
            updated_at = CURRENT_TIMESTAMP 
        WHERE id = $11 
        RETURNING *`,
-      [name, slug, description, price, unit, unit_value || 1, category_id, image_url, stock_quantity, is_available, id]
+      [name, slug, description, price, unit, unit_value || 1, category_id, image_url, stock_quantity, is_active, id]
     );
 
     if (result.rows.length === 0) {

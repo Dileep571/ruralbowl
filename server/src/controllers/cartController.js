@@ -14,8 +14,7 @@ const getCart = async (req, res) => {
          'price', p.price,
          'unit', p.unit,
          'image_url', p.image_url,
-         'stock_quantity', p.stock_quantity,
-         'has_variants', p.has_variants
+         'stock_quantity', p.stock_quantity
        ) as product
        FROM cart c 
        JOIN products p ON c.product_id = p.id 
@@ -63,15 +62,10 @@ const addToCart = async (req, res) => {
     let stockQuantity = product.stock_quantity;
     let itemPrice = product.price;
 
-    // If product has variants, variant_id is required
-    if (product.has_variants && !variant_id) {
-      return res.status(400).json({ message: 'Please select a variant' });
-    }
-
     // If variant is selected, check variant availability and use variant stock
     if (variant_id) {
       const variant = await ProductVariant.getById(variant_id);
-      if (!variant || !variant.is_available) {
+      if (!variant || !variant.is_active) {
         return res.status(404).json({ message: 'Variant not found or not available' });
       }
       stockQuantity = variant.stock_quantity;
@@ -220,7 +214,7 @@ const mergeGuestCart = async (req, res) => {
 
       // Check if product exists and is available
       const productCheck = await db.query(
-        'SELECT * FROM products WHERE id = $1 AND is_available = true',
+        'SELECT * FROM products WHERE id = $1 AND is_active = true',
         [product_id]
       );
 
@@ -248,11 +242,11 @@ const mergeGuestCart = async (req, res) => {
           [newQty, userId, product_id]
         );
       } else {
-        // Insert new item
+        // Insert new item (id will auto-increment)
         const safeQty = Math.min(quantity, product.stock_quantity);
         result = await db.query(
-          'INSERT INTO cart (user_id, product_id, quantity) VALUES ($1, $2, $3) RETURNING *',
-          [userId, product_id, safeQty]
+          'INSERT INTO cart (user_id, product_id, variant_id, quantity) VALUES ($1, $2, $3, $4) RETURNING *',
+          [userId, product_id, variant_id || null, safeQty]
         );
       }
       merged.push(result.rows[0]);

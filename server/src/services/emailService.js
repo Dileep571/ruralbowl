@@ -208,7 +208,7 @@ const templates = {
               <div class="total">
                 <div class="item">
                   <span>Total Amount:</span>
-                  <span>₹${order.total_amount}</span>
+                  <span>₹${order.total}</span>
                 </div>
               </div>
             </div>
@@ -404,7 +404,7 @@ const templates = {
               </div>
               <div class="detail-row">
                 <span>Amount Paid:</span>
-                <strong>₹${order.total_amount}</strong>
+                <strong>₹${order.total}</strong>
               </div>
               <div class="detail-row">
                 <span>Transaction Date:</span>
@@ -577,7 +577,7 @@ const templates = {
             
             <div class="refund-info">
               <h4 style="margin-top: 0;">💰 Refund Information</h4>
-              <p>Amount: <strong>₹${order.total_amount}</strong></p>
+              <p>Amount: <strong>₹${order.total}</strong></p>
               <p>If payment was already processed, your refund will be initiated within 3-5 business days.</p>
               <p>Refund will be credited to your original payment method.</p>
             </div>
@@ -631,7 +631,7 @@ const templates = {
               <p><strong>Customer:</strong> ${user.name}</p>
               <p><strong>Email:</strong> ${user.email}</p>
               <p><strong>Phone:</strong> ${user.phone || 'N/A'}</p>
-              <p><strong>Total Amount:</strong> ₹${order.total_amount}</p>
+              <p><strong>Total Amount:</strong> ₹${order.total}</p>
               <p><strong>Payment Method:</strong> ${order.payment_method}</p>
               <p><strong>Items:</strong> ${order.items?.length || 0} items</p>
               <p><strong>Order Time:</strong> ${new Date().toLocaleString('en-IN')}</p>

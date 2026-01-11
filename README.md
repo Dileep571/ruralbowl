@@ -2,6 +2,12 @@
 
 A full-stack e-commerce application for delivering fresh farm produce directly to customers, built with Next.js and Node.js/Express.
 
+## 🚀 Quick Links
+
+- **[Deployment Guide](./DEPLOYMENT_GUIDE.md)** - Complete guide for deploying to Render & Vercel
+- **[Deployment Checklist](./DEPLOYMENT_CHECKLIST.md)** - Quick deployment checklist
+- **[Deployment Summary](./DEPLOYMENT_SUMMARY.md)** - What's ready for production
+
 ## Features
 
 ### Customer Features

@@ -42,7 +42,7 @@ const processDeliveriesJob = cron.schedule('0 20 * * *', async () => {
           // Create order
           const orderResult = await client.query(
             `INSERT INTO orders 
-             (user_id, total_amount, subtotal, shipping_address, payment_method, payment_status, 
+             (user_id, total, subtotal, shipping_address, payment_method, payment_status, 
               status, order_type, user_plan_id, plan_delivery_id, notes)
              VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
              RETURNING *`,
@@ -65,9 +65,11 @@ const processDeliveriesJob = cron.schedule('0 20 * * *', async () => {
 
           // Create order items
           for (const item of items) {
+            const totalPrice = parseFloat(item.locked_price) * (item.quantity || 1);
             await client.query(
-              'INSERT INTO order_items (order_id, product_id, quantity, price) VALUES ($1, $2, $3, $4)',
-              [order.id, item.product_id, item.quantity || 1, item.locked_price]
+              `INSERT INTO order_items (order_id, product_id, product_name, quantity, unit_price, total_price) 
+               VALUES ($1, $2, $3, $4, $5, $6)`,
+              [order.id, item.product_id, item.product_name || 'Subscription Item', item.quantity || 1, item.locked_price, totalPrice]
             );
 
             // Deduct stock
@@ -207,9 +209,8 @@ const expirePlansJob = cron.schedule('0 2 * * *', async () => {
          JOIN subscription_plans sp ON up.plan_id = sp.id
          JOIN users u ON up.user_id = u.id
          WHERE up.status = 'active'
-         AND up.deliveries_remaining > 0
-         AND up.last_activity_date < CURRENT_DATE - INTERVAL '90 days'
-         AND NOT up.wallet_credit_converted`
+         AND (up.total_deliveries - up.deliveries_used) > 0
+         AND up.last_activity_date < CURRENT_DATE - INTERVAL '90 days'`
       );
 
       console.log(`💰 Found ${inactivePlansResult.rows.length} inactive plans to convert`);
@@ -233,7 +234,6 @@ const expirePlansJob = cron.schedule('0 2 * * *', async () => {
           await client.query(
             `UPDATE user_plans 
              SET status = 'expired', 
-                 wallet_credit_converted = true,
                  updated_at = CURRENT_TIMESTAMP
              WHERE id = $1`,
             [plan.id]
