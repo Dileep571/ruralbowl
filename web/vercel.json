@@ -4,10 +4,5 @@
   "buildCommand": "npm run build",
   "devCommand": "npm run dev",
   "installCommand": "npm install",
-  "regions": ["sin1"],
-  "build": {
-    "env": {
-      "NEXT_PUBLIC_API_URL": "${NEXT_PUBLIC_API_URL}"
-    }
-  }
+  "regions": ["sin1"]
 }
